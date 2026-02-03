@@ -1,3 +1,4 @@
+#!/usr/bin/env bun
 import {readdir, stat} from "node:fs/promises"
 import {join, resolve} from "node:path"
 import {serve} from "bun"

@@ -105,9 +105,10 @@ export const MessageSchema = z.object({
 })
 
 export const ThinkingMetadataSchema = z.object({
-	level: z.string(),
-	disabled: z.boolean(),
-	triggers: z.array(z.unknown()),
+	maxThinkingTokens: z.number().optional(),
+	level: z.string().optional(),
+	disabled: z.boolean().optional(),
+	triggers: z.array(z.unknown()).optional(),
 })
 
 export const LogEntrySchema = z.object({

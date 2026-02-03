@@ -1,21 +1,51 @@
-# bun-react-tailwind-template
+# cc-inspect
 
-To install dependencies:
+A web-based visualizer for Claude Code session logs.
+
+## Installation
+
+Install dependencies:
 
 ```bash
 bun install
 ```
 
-To start a development server:
+Link the executable globally:
+
+```bash
+npm link
+```
+
+## Usage
+
+Start the server:
+
+```bash
+cc-inspect
+```
+
+Or load a specific session:
+
+```bash
+cc-inspect -s ~/.claude/projects/-Users-foo/session-id.jsonl
+```
+
+View help:
+
+```bash
+cc-inspect --help
+```
+
+## Development
+
+Start with hot reload:
 
 ```bash
 bun dev
 ```
 
-To run for production:
+Run without linking:
 
 ```bash
 bun start
 ```
-
-This project was created using `bun init` in bun v1.2.22. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.

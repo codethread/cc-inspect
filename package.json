@@ -1,34 +1,35 @@
 {
-	"name": "cc-inspect",
-	"version": "0.1.0",
-	"private": true,
-	"type": "module",
-	"scripts": {
-		"dev": "bun --hot src/index.tsx",
-		"start": "bun src/index.tsx",
-		"build": "bun run build.ts",
-		"typecheck": "tsc --noEmit",
-		"fmt": "biome format --write .",
-		"lint": "biome lint .",
-		"check": "biome check .",
-		"fix": "biome check --write --unsafe --log-level=error .",
-		"test": "bun test",
-		"verify": "bun run fix && bun run test && bun run typecheck && bun run typecheck:react && bun run build && bun run sync-docs"
-	},
-	"dependencies": {
-		"bun-plugin-tailwind": "^0.0.15",
-		"markdown-to-jsx": "^8.0.0",
-		"react": "^19",
-		"react-dom": "^19",
-		"tailwindcss": "^4.1.11",
-		"zod": "^4.1.12"
-	},
-	"devDependencies": {
-		"typescript": "^5.0.0",
-		"@biomejs/biome": "^2.2.4",
-		"@total-typescript/ts-reset": "^0.6.1",
-		"@types/bun": "latest",
-		"@types/react": "^19",
-		"@types/react-dom": "^19"
-	}
+  "name": "cc-inspect",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "cc-inspect": "./src/index.tsx"
+  },
+  "scripts": {
+    "dev": "bun --hot src/index.tsx",
+    "start": "bun src/index.tsx",
+    "typecheck": "tsc --noEmit",
+    "fmt": "biome format --write .",
+    "lint": "biome lint .",
+    "check": "biome check .",
+    "fix": "biome check --write --unsafe --log-level=error .",
+    "verify": "bun run typecheck && bun run lint && bun fmt"
+  },
+  "dependencies": {
+    "bun-plugin-tailwind": "^0.0.15",
+    "markdown-to-jsx": "^8.0.0",
+    "react": "^19",
+    "react-dom": "^19",
+    "tailwindcss": "^4.1.11",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "@biomejs/biome": "^2.2.4",
+    "@total-typescript/ts-reset": "^0.6.1",
+    "@types/bun": "latest",
+    "@types/react": "^19",
+    "@types/react-dom": "^19"
+  }
 }
