@@ -4,11 +4,12 @@
   "private": true,
   "type": "module",
   "bin": {
-    "cc-inspect": "./src/index.tsx"
+    "cc-inspect": "./bin/cc-inspect"
   },
   "scripts": {
     "dev": "bun --hot src/index.tsx",
     "start": "bun src/index.tsx",
+    "build": "bun run build.ts",
     "typecheck": "tsc --noEmit",
     "fmt": "biome format --write .",
     "lint": "biome lint .",
