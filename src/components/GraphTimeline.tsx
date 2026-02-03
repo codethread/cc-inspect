@@ -205,6 +205,8 @@ export function GraphTimeline({sessionData, onSelectEvent, selectedEvent}: Graph
 				<svg
 					className="absolute inset-0 pointer-events-none"
 					style={{width: totalLaneWidth, height: eventsWithLanes.length * 60}}
+					role="img"
+					aria-label="Timeline lane dividers"
 				>
 					{laneAssignments.map((assignment) => (
 						<line
@@ -228,7 +230,6 @@ export function GraphTimeline({sessionData, onSelectEvent, selectedEvent}: Graph
 						laneWidth={laneWidth}
 						totalLanes={laneAssignments.length}
 						connections={connections.filter((c) => c.fromIndex === index || c.toIndex === index)}
-						allEvents={eventsWithLanes}
 						isSelected={selectedEvent?.id === event.id}
 						onSelect={() => onSelectEvent(event)}
 						agents={[sessionData.mainAgent, ...sessionData.mainAgent.children]}
@@ -245,7 +246,6 @@ interface EventRowProps {
 	laneWidth: number
 	totalLanes: number
 	connections: Connection[]
-	allEvents: EventWithLane[]
 	isSelected: boolean
 	onSelect: () => void
 	agents: AgentNode[]
@@ -257,7 +257,6 @@ function EventRow({
 	laneWidth,
 	totalLanes,
 	connections,
-	allEvents,
 	isSelected,
 	onSelect,
 	agents,
@@ -280,7 +279,12 @@ function EventRow({
 				{/* Left: Graph visualization */}
 				<div className="relative flex-shrink-0" style={{width: totalLanes * laneWidth, height: rowHeight}}>
 					{/* SVG for connections */}
-					<svg className="absolute inset-0 pointer-events-none" style={{width: totalLanes * laneWidth}}>
+					<svg
+						className="absolute inset-0 pointer-events-none"
+						style={{width: totalLanes * laneWidth}}
+						role="img"
+						aria-label="Event connections"
+					>
 						{connections.map((conn, i) => {
 							const isFrom = conn.fromIndex === index
 
