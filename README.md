@@ -2,6 +2,8 @@
 
 A web-based visualizer for Claude Code session logs.
 
+<img alt="Image" src="https://github.com/user-attachments/assets/76ee5b47-58ca-4418-9102-6b81878ed470" />
+
 ## Installation
 
 Install dependencies:
