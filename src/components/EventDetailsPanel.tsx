@@ -47,19 +47,7 @@ export function EventDetailsPanel({event, agents, onClose}: EventDetailsPanelPro
 							<span className="text-blue-100">{agentName}</span>
 							<span className="text-blue-400 text-xs">(Lane #{laneNumber})</span>
 						</div>
-						{agent?.subagentType && (
-							<div className="flex items-center gap-2 text-sm">
-								<span className="text-blue-300 font-semibold">Type:</span>
-								<span className="text-blue-200 font-mono">{agent.subagentType}</span>
-								{agent.model && (
-									<>
-										<span className="text-blue-400">-</span>
-										<span className="text-blue-300 font-semibold">Model:</span>
-										<span className="text-blue-200 font-mono">{agent.model}</span>
-									</>
-								)}
-							</div>
-						)}
+						<AgentDetails agent={agent} event={event} />
 					</div>
 				</div>
 
@@ -262,6 +250,48 @@ function EventContent({event}: {event: Event}) {
 				</div>
 			)
 	}
+}
+
+function AgentDetails({agent, event}: {agent: AgentNode | undefined; event: Event}) {
+	if (!agent) return null
+
+	const {subagentType, description} = agent
+
+	// Extract model from event data if it's a message type
+	let model: string | undefined
+	if (event.data.type === "assistant-message" || event.data.type === "user-message") {
+		model = event.data.model
+	}
+	// Fallback to agent model for other event types or if message doesn't have model
+	if (!model) {
+		model = agent.model
+	}
+
+	// If no additional info, don't render
+	if (!subagentType && !model && !description) return null
+
+	return (
+		<>
+			{subagentType && (
+				<div className="flex items-center gap-2 text-sm">
+					<span className="text-blue-300 font-semibold">Type:</span>
+					<span className="text-blue-200 font-mono">{subagentType}</span>
+				</div>
+			)}
+			{model && (
+				<div className="flex items-center gap-2 text-sm">
+					<span className="text-blue-300 font-semibold">Model:</span>
+					<span className="text-blue-200 font-mono">{model}</span>
+				</div>
+			)}
+			{description && (
+				<div className="flex items-start gap-2 text-sm">
+					<span className="text-blue-300 font-semibold">Description:</span>
+					<span className="text-blue-200">{description}</span>
+				</div>
+			)}
+		</>
+	)
 }
 
 function SectionHeader({emoji, children}: {emoji?: string; children: React.ReactNode}) {

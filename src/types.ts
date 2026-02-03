@@ -150,11 +150,13 @@ export type LogEntry = z.infer<typeof LogEntrySchema>
 export const UserMessageDataSchema = z.object({
 	type: z.literal("user-message"),
 	text: z.string(),
+	model: z.string().optional(),
 })
 
 export const AssistantMessageDataSchema = z.object({
 	type: z.literal("assistant-message"),
 	text: z.string(),
+	model: z.string().optional(),
 })
 
 export const ToolUseDataSchema = z.object({

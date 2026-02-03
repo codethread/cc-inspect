@@ -126,7 +126,7 @@ export async function parseSessionLogs(sessionLogPath: string): Promise<SessionD
 	const mainLogEntries = await parseJsonlFile(sessionLogPath)
 
 	// Find sub-agent logs that are referenced in this session
-	const agentLogs = await findAgentLogs(logDirectory, mainLogEntries)
+	const agentLogs = await findAgentLogs(logDirectory, mainLogEntries, sessionId)
 
 	// Build agent tree
 	const mainAgent = await buildAgentTree({sessionId, mainLogEntries, agentLogs, logDirectory})
@@ -220,7 +220,11 @@ function normalizeToolUseResult(toolUseResult: LogEntry["toolUseResult"]): ToolU
 	return Array.isArray(toolUseResult) ? toolUseResult[0] : toolUseResult
 }
 
-async function findAgentLogs(logDirectory: string, mainLogEntries: LogEntry[]): Promise<Map<string, string>> {
+async function findAgentLogs(
+	logDirectory: string,
+	mainLogEntries: LogEntry[],
+	sessionId: string,
+): Promise<Map<string, string>> {
 	// Extract agent IDs that were actually spawned in this session
 	const agentIds = new Set<string>()
 
@@ -250,11 +254,10 @@ async function findAgentLogs(logDirectory: string, mainLogEntries: LogEntry[]): 
 		}
 	}
 
-	// Only load agent logs for agents that were spawned in this session
+	// Load agent logs from session-specific subagents directory
 	const agentLogs = new Map<string, string>()
 	for (const agentId of agentIds) {
-		const logPath = join(logDirectory, `agent-${agentId}.jsonl`)
-		// Check if file exists by trying to read it
+		const logPath = join(logDirectory, sessionId, "subagents", `agent-${agentId}.jsonl`)
 		try {
 			const file = Bun.file(logPath)
 			const exists = await file.exists()
@@ -264,12 +267,23 @@ async function findAgentLogs(logDirectory: string, mainLogEntries: LogEntry[]): 
 				console.warn(`Warning: Agent log file not found for agent ${agentId}`)
 			}
 		} catch {
-			// Agent log file doesn't exist, skip it
 			console.warn(`Warning: Could not access agent log file for agent ${agentId}`)
 		}
 	}
 
 	return agentLogs
+}
+
+/**
+ * Extract the model from the main agent's first assistant message
+ */
+function extractMainAgentModel(logEntries: LogEntry[]): string | undefined {
+	for (const entry of logEntries) {
+		if (entry.type === "assistant" && entry.message?.model) {
+			return entry.message.model
+		}
+	}
+	return undefined
 }
 
 async function buildAgentTree(options: {
@@ -279,10 +293,15 @@ async function buildAgentTree(options: {
 	logDirectory: string
 }): Promise<AgentNode> {
 	const {sessionId, mainLogEntries, agentLogs, logDirectory} = options
+
+	// Extract model from the first assistant message
+	const mainModel = extractMainAgentModel(mainLogEntries)
+
 	// Create main agent node
 	const mainAgent: AgentNode = {
 		id: sessionId,
 		name: "Main Agent",
+		model: mainModel,
 		parent: null,
 		children: [],
 		events: parseEvents(mainLogEntries, sessionId, null),
@@ -541,6 +560,7 @@ function parseEvents(logEntries: LogEntry[], sessionId: string, agentId: string 
 					data: {
 						type: "user-message",
 						text: content,
+						model: entry.message.model,
 					},
 				})
 			}
@@ -560,6 +580,7 @@ function parseEvents(logEntries: LogEntry[], sessionId: string, agentId: string 
 							data: {
 								type: "assistant-message",
 								text: textContent.text,
+								model: entry.message.model,
 							},
 						})
 					} else if (item.type === "thinking") {
