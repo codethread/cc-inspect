@@ -1,7 +1,7 @@
 {
-	"$schema": "https://biomejs.dev/schemas/2.2.4/schema.json",
+	"$schema": "https://biomejs.dev/schemas/2.3.13/schema.json",
 	"files": {
-		"includes": ["bin/**/*.ts", "scripts/**/*.ts", "shared/**/*.ts", "tests/**/*.ts", "*.json", "*.ts"]
+		"includes": ["src/**/*.ts", "src/**/*.tsx"]
 	},
 	"linter": {
 		"enabled": true,
@@ -10,7 +10,9 @@
 			"nursery": {
 				"useMaxParams": {
 					"level": "error",
-					"options": { "max": 3 }
+					"options": {
+						"max": 3
+					}
 				}
 			},
 			"style": {
@@ -30,24 +32,15 @@
 			}
 		}
 	},
-	"overrides": [
-		{
-			"includes": ["tests/**/*.test.ts"],
-			"linter": {
-				"rules": {
-					"style": {
-						"noNonNullAssertion": "off"
-					}
-				}
-			}
-		}
-	],
 	"formatter": {
 		"enabled": true,
-		"lineWidth": 110
+		"lineWidth": 110,
+		"indentStyle": "tab"
 	},
 	"javascript": {
 		"formatter": {
+			"trailingCommas": "all",
+			"semicolons": "asNeeded",
 			"bracketSpacing": false
 		},
 		"parser": {
