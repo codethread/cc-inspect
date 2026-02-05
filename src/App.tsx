@@ -34,6 +34,7 @@ export function App() {
 	const [loading, setLoading] = useState(true)
 	const [error, setError] = useState<string | null>(null)
 	const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
+	const [copySuccess, setCopySuccess] = useState(false)
 
 	// Selection state
 	const [directories, setDirectories] = useState<string[]>([])
@@ -179,6 +180,19 @@ export function App() {
 		return () => window.removeEventListener("keydown", handleKeyDown)
 	}, [selectedEvent])
 
+	// Handle copy to clipboard
+	const handleCopyPath = async () => {
+		if (!selectedSession) return
+
+		try {
+			await navigator.clipboard.writeText(selectedSession)
+			setCopySuccess(true)
+			setTimeout(() => setCopySuccess(false), 2000)
+		} catch (err) {
+			console.error("Failed to copy:", err)
+		}
+	}
+
 	return (
 		<div className="min-h-screen bg-gray-950 text-gray-100">
 			{/* Header with persistent selectors */}
@@ -250,6 +264,33 @@ export function App() {
 								</select>
 							</div>
 						</div>
+
+						{/* Copy path button */}
+						{selectedSession && (
+							<div className="flex-shrink-0 self-end">
+								<button
+									type="button"
+									onClick={handleCopyPath}
+									className="px-3 py-1.5 bg-gray-800 border border-gray-700 rounded text-gray-300 hover:text-gray-100 hover:bg-gray-750 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+									title="Copy session path to clipboard"
+								>
+									{copySuccess ? (
+										<svg className="w-5 h-5 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+											<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+										</svg>
+									) : (
+										<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+											<path
+												strokeLinecap="round"
+												strokeLinejoin="round"
+												strokeWidth={2}
+												d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+											/>
+										</svg>
+									)}
+								</button>
+							</div>
+						)}
 					</div>
 				</div>
 			</header>

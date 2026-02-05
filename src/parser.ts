@@ -313,6 +313,9 @@ async function buildAgentTree(options: {
 		const agentEntries = await parseJsonlFile(logPath)
 		const agentInfo = extractAgentInfo(mainLogEntries, agentId)
 
+		// Extract model from agent's own log (first assistant message)
+		const agentModel = extractMainAgentModel(agentEntries)
+
 		// Parse events from agent file
 		const agentFileEvents = parseEvents(agentEntries, sessionId, agentId)
 
@@ -327,7 +330,7 @@ async function buildAgentTree(options: {
 		const agentNode: AgentNode = {
 			id: agentId,
 			name: agentInfo.name,
-			model: agentInfo.model,
+			model: agentModel,
 			subagentType: agentInfo.subagentType,
 			description: agentInfo.description,
 			parent: sessionId,
@@ -384,10 +387,11 @@ function extractAgentInfo(logEntries: LogEntry[], agentId: string): ExtendedAgen
 
 	if (!toolUseId) {
 		// Fallback to basic info from toolUseResult
+		const shortName = normalizedResult.prompt?.substring(0, 50) || null
 		return {
-			name: normalizedResult.prompt?.substring(0, 50) || null,
+			name: shortName,
 			model: undefined,
-			description: normalizedResult.prompt,
+			description: shortName,
 		}
 	}
 
@@ -401,12 +405,13 @@ function extractAgentInfo(logEntries: LogEntry[], agentId: string): ExtendedAgen
 					// Check if this is a resume call
 					const isResume = "resume" in toolUse.input
 					const resumesAgentId = isResume ? (toolUse.input.resume as string) : undefined
+					const shortDescription = (toolUse.input.description as string) || null
 
 					return {
-						name: (toolUse.input.description as string) || null,
+						name: shortDescription,
 						model: toolUse.input.model as string | undefined,
 						subagentType: toolUse.input.subagent_type as string | undefined,
-						description: toolUse.input.prompt as string | undefined,
+						description: shortDescription,
 						isResumed: isResume && resumesAgentId === agentId,
 						resumedFrom: isResume && resumesAgentId === agentId ? toolUse.id : undefined,
 					}
@@ -416,10 +421,11 @@ function extractAgentInfo(logEntries: LogEntry[], agentId: string): ExtendedAgen
 	}
 
 	// Fallback if we can't find the tool_use
+	const shortName = normalizedResult.prompt?.substring(0, 50) || null
 	return {
-		name: normalizedResult.prompt?.substring(0, 50) || null,
+		name: shortName,
 		model: undefined,
-		description: normalizedResult.prompt,
+		description: shortName,
 	}
 }
 
