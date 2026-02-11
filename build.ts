@@ -7,7 +7,7 @@ import {join} from "path";
 import {parseArgs} from "util";
 
 const BIN_DEST_DIR = join(import.meta.dir, "bin");
-const ENTRY_POINT = join(import.meta.dir, "src", "index.tsx");
+const ENTRY_POINT = join(import.meta.dir, "src", "server", "index.tsx");
 const DEST_PATH = join(BIN_DEST_DIR, "cc-inspect");
 
 async function buildExecutable(verbose = false) {

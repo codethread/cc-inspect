@@ -1,4 +1,4 @@
-import type {AgentNode, Event} from "../types"
+import type {AgentNode, Event} from "#types"
 import {MarkdownContent} from "./MarkdownContent"
 
 interface EventDetailsPanelProps {

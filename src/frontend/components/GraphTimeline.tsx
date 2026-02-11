@@ -1,5 +1,5 @@
 import {useMemo} from "react"
-import type {AgentNode, Event, SessionData} from "../types"
+import type {AgentNode, Event, SessionData} from "#types"
 
 interface GraphTimelineProps {
 	sessionData: SessionData

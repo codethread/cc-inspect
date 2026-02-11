@@ -1,4 +1,4 @@
-import type {AgentNode} from "../types"
+import type {AgentNode} from "#types"
 
 interface AgentTreeProps {
 	agent: AgentNode

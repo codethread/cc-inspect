@@ -7,8 +7,8 @@
     "cc-inspect": "./bin/cc-inspect"
   },
   "scripts": {
-    "dev": "bun --hot src/index.tsx",
-    "start": "bun src/index.tsx",
+    "dev": "bun --hot src/server/index.tsx",
+    "start": "bun src/server/index.tsx",
     "build": "bun run build.ts",
     "typecheck": "tsc --noEmit",
     "fmt": "biome format --write .",
@@ -16,6 +16,9 @@
     "check": "biome check .",
     "fix": "biome check --write --unsafe --log-level=error .",
     "verify": "bun run typecheck && bun run lint && bun fmt"
+  },
+  "imports": {
+    "#types": "./src/types.ts"
   },
   "dependencies": {
     "bun-plugin-tailwind": "^0.0.15",

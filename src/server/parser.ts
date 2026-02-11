@@ -13,8 +13,8 @@ import type {
 	ToolResultContent,
 	ToolUseContent,
 	ToolUseResult,
-} from "./types"
-import {LogEntrySchema} from "./types"
+} from "#types"
+import {LogEntrySchema} from "#types"
 
 /**
  * Detailed error information for parse failures
@@ -558,6 +558,21 @@ function parseEvents(logEntries: LogEntry[], sessionId: string, agentId: string 
 							},
 						})
 					}
+				}
+				// Also extract text content from array (e.g. command prompts)
+				const textParts = content
+					.filter((item) => item.type === "text")
+					.map((item) => (item as TextContent).text)
+				if (textParts.length > 0) {
+					events.push({
+						...baseEvent,
+						type: "user-message" as EventType,
+						data: {
+							type: "user-message",
+							text: textParts.join("\n"),
+							model: entry.message.model,
+						},
+					})
 				}
 			} else if (typeof content === "string") {
 				events.push({

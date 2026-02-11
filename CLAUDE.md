@@ -9,6 +9,7 @@ cc-inspect is a web-based visualizer for Claude Code session logs. It parses `.j
 ## Common Commands
 
 ### Development
+
 - `bun dev` - Start development server with hot reload on port 5555
 - `bun start` - Run without hot reload
 - `cc-inspect` - Run the globally linked CLI (after `npm link`)
@@ -16,6 +17,7 @@ cc-inspect is a web-based visualizer for Claude Code session logs. It parses `.j
 - `cc-inspect --help` - Show CLI help
 
 ### Code Quality
+
 - `bun run typecheck` - Type check with TypeScript
 - `bun run lint` - Lint with Biome
 - `bun run fmt` - Format code with Biome
@@ -24,12 +26,13 @@ cc-inspect is a web-based visualizer for Claude Code session logs. It parses `.j
 - `bun run verify` - Run all checks (typecheck + lint + format)
 
 ### Installation
+
 - `bun install` - Install dependencies
 - `npm link` - Link the CLI globally for system-wide use
 
 ## Architecture
 
-### Server (src/index.tsx)
+### Server (src/server/index.tsx)
 
 Entry point that runs a Bun server with REST API endpoints:
 
@@ -79,7 +82,7 @@ Comprehensive Zod schemas and TypeScript types for:
 
 All parsing uses Zod for runtime validation to catch schema mismatches early.
 
-### Frontend (src/App.tsx, src/frontend.tsx)
+### Frontend (src/frontend/App.tsx, src/frontend/frontend.tsx)
 
 React app with three main features:
 
@@ -93,55 +96,10 @@ The app uses `fetch()` to call the REST API and manages state with React hooks. 
 
 ## File Structure
 
-- `src/index.tsx` - Bun server entry point (CLI binary via shebang)
-- `src/parser.ts` - Session log parser with agent tree builder
 - `src/types.ts` - Zod schemas and TypeScript types
-- `src/App.tsx` - Main React component with selectors and layout
-- `src/frontend.tsx` - React DOM mounting
-- `src/components/` - React UI components (timeline, event list, details panel)
-- `src/index.html` - HTML entry point that imports React app
-
-## Key Implementation Details
-
-### Agent Discovery
-Sub-agents are discovered by scanning log entries for `toolUseResult.agentId` fields, then loading corresponding `agent-<id>.jsonl` files from the same directory as the main session log.
-
-### Resumed Agents
-When a Task tool is called with a `resume` parameter, events for that agent appear in both:
-1. The agent's own log file (`agent-<id>.jsonl`)
-2. The main session log (after resume)
-
-The parser combines events from both sources and sorts chronologically.
-
-### Tool Use Matching
-To extract agent metadata (from Task tool parameters like `description`, `model`, `subagent_type`), the parser:
-1. Finds tool results with `agentId` in user messages
-2. Extracts `tool_use_id` from the tool_result content
-3. Searches backward for assistant messages containing matching `tool_use` with that ID
-4. Extracts input parameters from the tool_use
-
-### Security
-Directory and session path parameters are validated to prevent path traversal attacks. All paths must be within `~/.claude/projects/`.
-
-## Bun-Specific Patterns
-
-Default to using Bun instead of Node.js:
-
-- Use `bun <file>` instead of `node <file>` or `ts-node <file>`
-- Use `bun test` instead of `jest` or `vitest`
-- Use `bun build <file.html|file.ts|file.css>` instead of `webpack` or `esbuild`
-- Use `bun install` instead of `npm install` or `yarn install` or `pnpm install`
-- Use `bun run <script>` instead of `npm run <script>` or `yarn run <script>` or `pnpm run <script>`
-- Bun automatically loads .env, so don't use dotenv
-
-### Bun APIs
-- `Bun.serve()` supports WebSockets, HTTPS, and routes. Don't use `express`.
-- `bun:sqlite` for SQLite. Don't use `better-sqlite3`.
-- `Bun.redis` for Redis. Don't use `ioredis`.
-- `Bun.sql` for Postgres. Don't use `pg` or `postgres.js`.
-- `WebSocket` is built-in. Don't use `ws`.
-- Prefer `Bun.file` over `node:fs`'s readFile/writeFile
-- Bun.$`ls` instead of execa
-
-### Frontend with Bun
-HTML imports with `Bun.serve()` support React, CSS, and Tailwind without Vite. HTML files can import `.tsx`, `.jsx`, or `.js` files directly and Bun's bundler will transpile & bundle automatically. `<link>` tags can point to stylesheets and Bun's CSS bundler will bundle them.
+- `src/frontend/App.tsx` - Main React component with selectors and layout
+- `src/frontend/frontend.tsx` - React DOM mounting
+- `src/frontend/components/` - React UI components (timeline, event list, details panel)
+- `src/frontend/index.html` - HTML entry point that imports React app
+- `src/server/index.tsx` - Bun server entry point (CLI binary via shebang)
+- `src/server/parser.ts` - Session log parser with agent tree builder

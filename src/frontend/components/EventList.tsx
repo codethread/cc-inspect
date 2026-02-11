@@ -1,5 +1,5 @@
 import {useState} from "react"
-import type {AgentNode, Event} from "../types"
+import type {AgentNode, Event} from "#types"
 
 interface EventListProps {
 	events: Event[]
