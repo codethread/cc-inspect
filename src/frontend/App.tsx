@@ -1,13 +1,7 @@
 import "./index.css"
 import {useEffect, useState} from "react"
-import type {
-	DirectoriesResponse,
-	Event,
-	Session,
-	SessionData,
-	SessionDataResponse,
-	SessionsResponse,
-} from "#types"
+import type {Event} from "#types"
+import {useCliSession, useDirectories, useSessionData, useSessions} from "./api"
 import {EventDetailsPanel} from "./components/EventDetailsPanel"
 import {GraphTimeline} from "./components/GraphTimeline"
 import {Header} from "./components/Header"
@@ -31,142 +25,45 @@ function updateUrlParams(directory: string, sessionPath: string) {
 }
 
 export function App() {
-	const [sessionData, setSessionData] = useState<SessionData | null>(null)
-	const [loading, setLoading] = useState(true)
-	const [error, setError] = useState<string | null>(null)
+	const [selectedDirectory, setSelectedDirectory] = useState(() => getUrlParams().directory)
+	const [selectedSession, setSelectedSession] = useState(() => getUrlParams().sessionPath)
 	const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
 
-	// Selection state
-	const [directories, setDirectories] = useState<string[]>([])
-	const [selectedDirectory, setSelectedDirectory] = useState<string>("")
-	const [sessions, setSessions] = useState<Session[]>([])
-	const [selectedSession, setSelectedSession] = useState<string>("")
-	const [loadingDirectories, setLoadingDirectories] = useState(false)
-	const [loadingSessions, setLoadingSessions] = useState(false)
+	const {data: directories = [], error: dirError} = useDirectories()
+	const {
+		data: sessions = [],
+		isLoading: loadingSessions,
+		error: sessionsError,
+	} = useSessions(selectedDirectory)
+	const {
+		data: selectedSessionData,
+		isLoading: loadingSession,
+		error: sessionError,
+	} = useSessionData(selectedSession)
+	const {data: cliSessionData, isLoading: loadingCli} = useCliSession()
 
-	// Initialize from URL parameters and load initial data
+	const sessionData = selectedSession ? (selectedSessionData ?? null) : (cliSessionData ?? null)
+	const loading = selectedSession ? loadingSession : loadingCli
+	const error = dirError?.message ?? sessionsError?.message ?? sessionError?.message ?? null
+
+	// Clear selectedDirectory if it's not in the loaded list
 	useEffect(() => {
-		const loadInitialData = async () => {
-			const urlParams = getUrlParams()
-
-			// Load directories first
-			setLoadingDirectories(true)
-			try {
-				const dirRes = await fetch("/api/directories")
-				const dirData: DirectoriesResponse = await dirRes.json()
-				if (dirData.status === "success") {
-					setDirectories(dirData.directories)
-
-					// If we have URL params, validate and restore them
-					if (urlParams.directory && dirData.directories.includes(urlParams.directory)) {
-						setSelectedDirectory(urlParams.directory)
-					}
-				} else {
-					setError(dirData.error)
-				}
-			} catch (err) {
-				const message = err instanceof Error ? err.message : String(err)
-				setError(`Failed to load directories: ${message}`)
-			} finally {
-				setLoadingDirectories(false)
-			}
-
-			// Try to load CLI-provided session or URL session
-			try {
-				const res = await fetch("/api/session")
-				const data: SessionDataResponse = await res.json()
-				if (data.status === "success") {
-					setSessionData(data.data)
-					setLoading(false)
-					return
-				}
-			} catch {
-				// No CLI session, continue with URL params
-			}
-
-			setLoading(false)
-
-			// If we have session path from URL, try to load sessions for that directory
-			if (urlParams.sessionPath && urlParams.directory) {
-				setSelectedSession(urlParams.sessionPath)
-			}
+		if (directories.length > 0 && selectedDirectory && !directories.includes(selectedDirectory)) {
+			setSelectedDirectory("")
 		}
+	}, [directories, selectedDirectory])
 
-		loadInitialData()
-	}, [])
+	// Clear selectedSession if it's not in the loaded list
+	useEffect(() => {
+		if (sessions.length > 0 && selectedSession && !sessions.find((s) => s.path === selectedSession)) {
+			setSelectedSession("")
+		}
+	}, [sessions, selectedSession])
 
 	// Update URL when directory or session changes
 	useEffect(() => {
 		updateUrlParams(selectedDirectory, selectedSession)
 	}, [selectedDirectory, selectedSession])
-
-	// Load sessions when directory is selected
-	useEffect(() => {
-		if (!selectedDirectory) {
-			setSessions([])
-			setSelectedSession("")
-			return
-		}
-
-		const loadSessions = async () => {
-			setLoadingSessions(true)
-			setSessions([])
-			try {
-				const res = await fetch(`/api/sessions?directory=${encodeURIComponent(selectedDirectory)}`)
-				const data: SessionsResponse = await res.json()
-				if (data.status === "success") {
-					setSessions(data.sessions)
-
-					// Check if URL session param is valid for this directory
-					const urlParams = getUrlParams()
-					const validSession = data.sessions.find((s) => s.path === urlParams.sessionPath)
-					if (validSession && !selectedSession) {
-						setSelectedSession(validSession.path)
-					} else if (!validSession && selectedSession) {
-						// URL session not valid for this directory, clear it
-						setSelectedSession("")
-					}
-				} else {
-					setError(data.error)
-				}
-			} catch (err) {
-				const message = err instanceof Error ? err.message : String(err)
-				setError(`Failed to load sessions: ${message}`)
-			} finally {
-				setLoadingSessions(false)
-			}
-		}
-
-		loadSessions()
-	}, [selectedDirectory, selectedSession])
-
-	// Load session data when session is selected
-	useEffect(() => {
-		if (!selectedSession) {
-			return
-		}
-
-		const loadSessionData = async () => {
-			setLoading(true)
-			setError(null)
-			try {
-				const res = await fetch(`/api/session?path=${encodeURIComponent(selectedSession)}`)
-				const data: SessionDataResponse = await res.json()
-				if (data.status === "success") {
-					setSessionData(data.data)
-				} else {
-					setError(data.error)
-				}
-			} catch (err) {
-				const message = err instanceof Error ? err.message : String(err)
-				setError(`Failed to load session: ${message}`)
-			} finally {
-				setLoading(false)
-			}
-		}
-
-		loadSessionData()
-	}, [selectedSession])
 
 	// Handle keyboard shortcuts
 	useEffect(() => {
@@ -180,32 +77,17 @@ export function App() {
 		return () => window.removeEventListener("keydown", handleKeyDown)
 	}, [selectedEvent])
 
-	// Handle directory change
 	const handleDirectoryChange = (dir: string) => {
 		setSelectedDirectory(dir)
-		setSessionData(null)
+		setSelectedSession("")
 	}
 
-	// Handle session change
 	const handleSessionChange = (sessionPath: string) => {
 		setSelectedSession(sessionPath)
-		setSessionData(null)
 	}
 
-	// Handle session deletion
-	const handleSessionDeleted = async () => {
-		// Clear current session
-		setSessionData(null)
+	const handleSessionDeleted = () => {
 		setSelectedSession("")
-
-		// Reload sessions list for current directory
-		if (selectedDirectory) {
-			const res = await fetch(`/api/sessions?directory=${encodeURIComponent(selectedDirectory)}`)
-			const data: SessionsResponse = await res.json()
-			if (data.status === "success") {
-				setSessions(data.sessions)
-			}
-		}
 	}
 
 	return (
@@ -215,7 +97,7 @@ export function App() {
 				directories={directories}
 				selectedDirectory={selectedDirectory}
 				onDirectoryChange={handleDirectoryChange}
-				loadingDirectories={loadingDirectories}
+				loadingDirectories={directories.length === 0 && !dirError}
 				sessions={sessions}
 				selectedSession={selectedSession}
 				onSessionChange={handleSessionChange}

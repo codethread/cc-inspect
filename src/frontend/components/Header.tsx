@@ -1,5 +1,6 @@
 import {useState} from "react"
 import type {Session, SessionData} from "#types"
+import {useDeleteSession} from "../api"
 
 interface HeaderProps {
 	sessionData: SessionData | null
@@ -27,7 +28,7 @@ export function Header({
 	onSessionDeleted,
 }: HeaderProps) {
 	const [copySuccess, setCopySuccess] = useState(false)
-	const [deleting, setDeleting] = useState(false)
+	const deleteSession = useDeleteSession()
 
 	const handleCopyPath = async () => {
 		if (!selectedSession) return
@@ -41,30 +42,15 @@ export function Header({
 		}
 	}
 
-	const handleDeleteSession = async () => {
+	const handleDeleteSession = () => {
 		if (!selectedSession) return
 
 		const confirmed = window.confirm("Are you sure you want to delete this session?")
 		if (!confirmed) return
 
-		setDeleting(true)
-		try {
-			const res = await fetch(`/api/session/delete?path=${encodeURIComponent(selectedSession)}`, {
-				method: "DELETE",
-			})
-			const data = await res.json()
-
-			if (data.status === "success") {
-				onSessionDeleted()
-			} else {
-				console.error(data.error || "Failed to delete session")
-			}
-		} catch (err) {
-			const message = err instanceof Error ? err.message : String(err)
-			console.error(`Failed to delete session: ${message}`)
-		} finally {
-			setDeleting(false)
-		}
+		deleteSession.mutate(selectedSession, {
+			onSuccess: () => onSessionDeleted(),
+		})
 	}
 
 	return (
@@ -175,11 +161,11 @@ export function Header({
 							<button
 								type="button"
 								onClick={handleDeleteSession}
-								disabled={deleting}
+								disabled={deleteSession.isPending}
 								className="px-3 py-1.5 bg-gray-800 border border-gray-700 rounded text-red-400 hover:text-red-300 hover:bg-gray-750 focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
 								title="Delete session"
 							>
-								{deleting ? (
+								{deleteSession.isPending ? (
 									<svg
 										role="img"
 										className="w-5 h-5 animate-spin"

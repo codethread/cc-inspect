@@ -92,13 +92,14 @@ React app with three main features:
 
 3. **EventDetailsPanel** - Side panel displaying full event data when selected
 
-The app uses `fetch()` to call the REST API and manages state with React hooks. It handles CLI-provided sessions by attempting to load `/api/session` without parameters on mount.
+The app uses TanStack Query (`@tanstack/react-query`) for data fetching, with query/mutation hooks defined in `src/frontend/api.ts`. The `QueryClientProvider` is set up in `frontend.tsx`. CLI-provided sessions are handled by a `useCliSession` hook that attempts to load `/api/session` without parameters.
 
 ## File Structure
 
 - `src/types.ts` - Zod schemas and TypeScript types
 - `src/frontend/App.tsx` - Main React component with selectors and layout
-- `src/frontend/frontend.tsx` - React DOM mounting
+- `src/frontend/api.ts` - TanStack Query hooks and fetch helper
+- `src/frontend/frontend.tsx` - React DOM mounting with QueryClientProvider
 - `src/frontend/components/` - React UI components (timeline, event list, details panel)
 - `src/frontend/index.html` - HTML entry point that imports React app
 - `src/server/index.tsx` - Bun server entry point (CLI binary via shebang)

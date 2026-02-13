@@ -21,6 +21,7 @@
     "#types": "./src/types.ts"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.90.21",
     "bun-plugin-tailwind": "^0.0.15",
     "markdown-to-jsx": "^8.0.0",
     "react": "^19",
