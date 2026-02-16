@@ -1,8 +1,9 @@
 #!/usr/bin/env bun
 import {serve} from "bun"
+import {dirname} from "node:path"
 import {parseArgs} from "util"
 import index from "../frontend/index.html"
-import {parseSessionLogs} from "./parser"
+import {Claude} from "../lib/claude"
 import {directoriesHandler} from "./routes/directories"
 import {sessionHandler} from "./routes/session"
 import {sessionDeleteHandler} from "./routes/session-delete"
@@ -43,7 +44,24 @@ Examples:
 		cliSessionPath = values.session as string
 		console.log(`📖 Validating session logs: ${cliSessionPath}`)
 		try {
-			const sessionData = await parseSessionLogs(cliSessionPath)
+			// Extract components from the session path
+			const projectDir = dirname(cliSessionPath)
+			const filename = cliSessionPath.split("/").pop() || ""
+			const sessionId = filename.replace(".jsonl", "")
+
+			// Construct SessionHandle
+			const sessionHandle = {
+				filename,
+				path: cliSessionPath,
+				sessionId,
+				modifiedAt: new Date(),
+				size: 0,
+			}
+
+			// Initialize Claude SDK and parse
+			const claude = new Claude({path: dirname(projectDir)})
+			const sessionData = await claude.parseSession(sessionHandle)
+
 			console.log(
 				`✅ Validated ${sessionData.allEvents.length} events from ${sessionData.mainAgent.children.length + 1} agents`,
 			)
