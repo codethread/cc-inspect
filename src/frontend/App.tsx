@@ -1,40 +1,16 @@
 import "./index.css"
-import {useEffect, useState} from "react"
-import type {Event} from "#types"
-import {useCliSession, useDirectories, useSessionData, useSessions} from "./api"
+import {useEffect} from "react"
+import {useCliSession, useSessionData} from "./api"
 import {EventDetailsPanel} from "./components/EventDetailsPanel"
 import {GraphTimeline} from "./components/GraphTimeline"
 import {Header} from "./components/Header"
-
-// URL parameter management
-function getUrlParams() {
-	const params = new URLSearchParams(window.location.search)
-	return {
-		directory: params.get("directory") || "",
-		sessionPath: params.get("session") || "",
-	}
-}
-
-function updateUrlParams(directory: string, sessionPath: string) {
-	const params = new URLSearchParams()
-	if (directory) params.set("directory", directory)
-	if (sessionPath) params.set("session", sessionPath)
-
-	const newUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ""}`
-	window.history.replaceState({}, "", newUrl)
-}
+import {useAppStore} from "./store"
 
 export function App() {
-	const [selectedDirectory, setSelectedDirectory] = useState(() => getUrlParams().directory)
-	const [selectedSession, setSelectedSession] = useState(() => getUrlParams().sessionPath)
-	const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
+	const selectedSession = useAppStore((s) => s.selectedSession)
+	const selectedEvent = useAppStore((s) => s.selectedEvent)
+	const selectEvent = useAppStore((s) => s.selectEvent)
 
-	const {data: directories = [], error: dirError} = useDirectories()
-	const {
-		data: sessions = [],
-		isLoading: loadingSessions,
-		error: sessionsError,
-	} = useSessions(selectedDirectory)
 	const {
 		data: selectedSessionData,
 		isLoading: loadingSession,
@@ -44,70 +20,23 @@ export function App() {
 
 	const sessionData = selectedSession ? (selectedSessionData ?? null) : (cliSessionData ?? null)
 	const loading = selectedSession ? loadingSession : loadingCli
-	const error = dirError?.message ?? sessionsError?.message ?? sessionError?.message ?? null
-
-	// Clear selectedDirectory if it's not in the loaded list
-	useEffect(() => {
-		if (directories.length > 0 && selectedDirectory && !directories.includes(selectedDirectory)) {
-			setSelectedDirectory("")
-		}
-	}, [directories, selectedDirectory])
-
-	// Clear selectedSession if it's not in the loaded list
-	useEffect(() => {
-		if (
-			sessions.length > 0 &&
-			selectedSession &&
-			!sessions.find((s) => s.sessionFilePath === selectedSession)
-		) {
-			setSelectedSession("")
-		}
-	}, [sessions, selectedSession])
-
-	// Update URL when directory or session changes
-	useEffect(() => {
-		updateUrlParams(selectedDirectory, selectedSession)
-	}, [selectedDirectory, selectedSession])
+	const error = sessionError?.message ?? null
 
 	// Handle keyboard shortcuts
 	useEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {
 			if (e.key === "Escape" && selectedEvent) {
-				setSelectedEvent(null)
+				selectEvent(null)
 			}
 		}
 
 		window.addEventListener("keydown", handleKeyDown)
 		return () => window.removeEventListener("keydown", handleKeyDown)
-	}, [selectedEvent])
-
-	const handleDirectoryChange = (dir: string) => {
-		setSelectedDirectory(dir)
-		setSelectedSession("")
-	}
-
-	const handleSessionChange = (sessionPath: string) => {
-		setSelectedSession(sessionPath)
-	}
-
-	const handleSessionDeleted = () => {
-		setSelectedSession("")
-	}
+	}, [selectedEvent, selectEvent])
 
 	return (
 		<div className="min-h-screen bg-gray-950 text-gray-100">
-			<Header
-				sessionData={sessionData}
-				directories={directories}
-				selectedDirectory={selectedDirectory}
-				onDirectoryChange={handleDirectoryChange}
-				loadingDirectories={directories.length === 0 && !dirError}
-				sessions={sessions}
-				selectedSession={selectedSession}
-				onSessionChange={handleSessionChange}
-				loadingSessions={loadingSessions}
-				onSessionDeleted={handleSessionDeleted}
-			/>
+			<Header sessionData={sessionData} />
 
 			{/* Main content */}
 			<div className="max-w-[1800px] mx-auto px-6 py-6">
@@ -127,22 +56,12 @@ export function App() {
 					</div>
 				)}
 
-				{sessionData && (
-					<GraphTimeline
-						sessionData={sessionData}
-						onSelectEvent={setSelectedEvent}
-						selectedEvent={selectedEvent}
-					/>
-				)}
+				{sessionData && <GraphTimeline sessionData={sessionData} />}
 			</div>
 
 			{/* Side panel for event details */}
 			{selectedEvent && sessionData && (
-				<EventDetailsPanel
-					event={selectedEvent}
-					agents={[sessionData.mainAgent, ...sessionData.mainAgent.children]}
-					onClose={() => setSelectedEvent(null)}
-				/>
+				<EventDetailsPanel agents={[sessionData.mainAgent, ...sessionData.mainAgent.children]} />
 			)}
 		</div>
 	)

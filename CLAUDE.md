@@ -36,90 +36,29 @@ cc-inspect is a web-based visualizer for Claude Code session logs. It parses `.j
 
 ## Architecture
 
-### Claude SDK (src/lib/claude/)
+Three main domains, each with their own `CLAUDE.md` containing detailed documentation:
 
-Self-contained SDK for parsing Claude Code `.jsonl` session logs. Designed for future extraction as a standalone npm library.
+- **`src/lib/`** — Self-contained Claude SDK for parsing `.jsonl` session logs
+- **`src/server/`** — Bun HTTP server with REST API endpoints consuming the SDK
+- **`src/frontend/`** — React app for timeline visualization
 
-**Public API** via the `Claude` class:
+**`src/types.ts`** bridges the domains: re-exports SDK types via `#types` alias and defines app-level API response schemas (discriminated unions) for the server-frontend contract.
 
-```ts
-const claude = new Claude({ path: '/absolute/path/to/projects/dir' })
-const projects: ProjectHandle[] = await claude.listProjects()
-const sessions: SessionHandle[] = await claude.listSessions(project)
-const sessionData: SessionData = await claude.parseSession(session)
-```
-
-**Files:**
-
-- `index.ts` — `Claude` class + re-exports (public entry point)
-- `types.ts` — All Zod schemas and inferred types for the log domain (LogEntry, Event, AgentNode, SessionData, ProjectHandle, SessionHandle)
-- `parser.ts` — Pure parsing functions (internal). Uses `FileReader` interface for dependency injection to enable testing without filesystem access
-- `errors.ts` — `ParseError` class with detailed debugging info (line numbers, Zod errors, actual values)
-- `__tests__/` — Test suite with fixtures derived from real session logs
-
-**Key patterns:**
-
-- `FileReader` DI interface (`readText`, `exists`) abstracts file reading; `bunFileReader` is the default Bun implementation
-- `ProjectHandle` and `SessionHandle` are lightweight descriptors with pre-computed absolute paths
-- `listProjects`/`listSessions` use `node:fs/promises` directly; only `.jsonl` content parsing uses `FileReader`
-
-### Server (src/server/index.tsx)
-
-Thin layer that runs a Bun server with REST API endpoints consuming the Claude SDK:
-
-- `/api/directories` — `claude.listProjects()` → directory IDs
-- `/api/sessions?directory=<dir>` — `claude.listSessions(project)` → session handles
-- `/api/session?path=<path>` — `claude.parseSession(session)` → full session data
-
-Path traversal validation (`isValidDirectory`, `isValidSessionPath` in `utils.ts`) is a server security concern, not an SDK concern.
-
-CLI flags parsed with `util.parseArgs()`. `-s/--session` pre-validates via `claude.parseSession()`.
-
-### Type System (src/types.ts)
-
-Re-exports all SDK types via `export * from "./lib/claude"` so the `#types` import alias continues to work. Also defines app-level API response schemas (DirectoriesResponseSchema, SessionsResponseSchema, SessionDataResponseSchema) as discriminated unions for the server↔frontend contract.
-
-### Frontend (src/frontend/App.tsx, src/frontend/frontend.tsx)
-
-React app with three main features:
-
-1. **Directory/Session selector** - Dropdown UI in header to browse and load sessions, with URL persistence (`?directory=<dir>&session=<path>`)
-
-2. **GraphTimeline** - Main visualization component showing events chronologically with agent context
-
-3. **EventDetailsPanel** - Side panel displaying full event data when selected
-
-The app uses TanStack Query (`@tanstack/react-query`) for data fetching, with query/mutation hooks defined in `src/frontend/api.ts`. The `QueryClientProvider` is set up in `frontend.tsx`. CLI-provided sessions are handled by a `useCliSession` hook that attempts to load `/api/session` without parameters.
-
-## File Structure
-
-- `src/lib/claude/` - Self-contained Claude Code SDK (types, parser, errors, Claude class)
-- `src/lib/claude/__tests__/` - SDK test suite with .jsonl fixtures
-- `src/types.ts` - Re-exports SDK types + app-level API response schemas
-- `src/server/index.tsx` - Bun server entry point (CLI binary via shebang)
-- `src/server/routes/` - Thin route handlers using Claude SDK
-- `src/server/utils.ts` - Server-level path validation and constants
-- `src/frontend/App.tsx` - Main React component with selectors and layout
-- `src/frontend/api.ts` - TanStack Query hooks and fetch helper
-- `src/frontend/frontend.tsx` - React DOM mounting with QueryClientProvider
-- `src/frontend/components/` - React UI components (timeline, event list, details panel)
-- `src/frontend/index.html` - HTML entry point that imports React app
-
-## Code style
+## Code Style
 
 - Focus on pure functions with minimal side effects
-- Ensure functions minimise side effects and use dependency injection to maximise testability
-- Keep type purity, i.e ensure all unknown IO is validated through zod and then strictly parsed into discriminated union types where possible (we want the type system to encapsulate as much correctness as possible).
-- Code can make breaking changes, there is no public api or legacy behaviour - however all checks must pass for work to be considered finished
-- avoid index files and default exports, use named files and exports for clear usage patterns. Typescript namespaces are valid to group logical functions into a cohesive collection without the need for an object to hold them.
-- use inline interfaces for return types in most cases (or shared interfaces if applicable)
+- Use dependency injection to maximise testability
+- Validate all unknown IO through Zod, parse into discriminated union types where possible
+- No public API or legacy behaviour — breaking changes are fine, but all checks must pass
+- Avoid index files and default exports; use named files and exports. TypeScript namespaces are valid for grouping logical functions
+- Use inline interfaces for return types in most cases (or shared interfaces if applicable)
 
-## Test style
+## Test Style
 
-- tests should use tables, i.e it.each or similar. This aligns with pure functions that can assert on input and output
-- tests should try to reuse common factory functions to make refactors to inputs easier
+- Table-driven tests (`it.each` or similar) aligned with pure function input/output assertions
+- Reuse common factory functions to make input refactors easier
 
-## Development process
+## Development Process
 
 This project uses a strict plan -> build process facilitated by beads (`bd` cli) for task management. The process has two distinct phases: an exploratory planning phase (no beads), followed by an execution phase (driven by beads).
 

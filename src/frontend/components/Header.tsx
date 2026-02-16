@@ -1,34 +1,42 @@
-import {useState} from "react"
-import type {SessionData, SessionHandle} from "#types"
-import {useDeleteSession} from "../api"
+import {useEffect, useState} from "react"
+import type {SessionData} from "#types"
+import {useDeleteSession, useDirectories, useSessions} from "../api"
+import {useAppStore} from "../store"
 
 interface HeaderProps {
 	sessionData: SessionData | null
-	directories: string[]
-	selectedDirectory: string
-	onDirectoryChange: (dir: string) => void
-	loadingDirectories: boolean
-	sessions: SessionHandle[]
-	selectedSession: string
-	onSessionChange: (sessionPath: string) => void
-	loadingSessions: boolean
-	onSessionDeleted: () => void
 }
 
-export function Header({
-	sessionData,
-	directories,
-	selectedDirectory,
-	onDirectoryChange,
-	loadingDirectories,
-	sessions,
-	selectedSession,
-	onSessionChange,
-	loadingSessions,
-	onSessionDeleted,
-}: HeaderProps) {
+export function Header({sessionData}: HeaderProps) {
 	const [copySuccess, setCopySuccess] = useState(false)
+	const selectedDirectory = useAppStore((s) => s.selectedDirectory)
+	const selectedSession = useAppStore((s) => s.selectedSession)
+	const selectDirectory = useAppStore((s) => s.selectDirectory)
+	const selectSession = useAppStore((s) => s.selectSession)
+
+	const {data: directories = [], error: dirError} = useDirectories()
+	const {data: sessions = [], isLoading: loadingSessions} = useSessions(selectedDirectory)
 	const deleteSession = useDeleteSession()
+
+	const loadingDirectories = directories.length === 0 && !dirError
+
+	// Clear selectedDirectory if it's not in the loaded list
+	useEffect(() => {
+		if (directories.length > 0 && selectedDirectory && !directories.includes(selectedDirectory)) {
+			selectDirectory("")
+		}
+	}, [directories, selectedDirectory, selectDirectory])
+
+	// Clear selectedSession if it's not in the loaded list
+	useEffect(() => {
+		if (
+			sessions.length > 0 &&
+			selectedSession &&
+			!sessions.find((s) => s.sessionFilePath === selectedSession)
+		) {
+			selectSession("")
+		}
+	}, [sessions, selectedSession, selectSession])
 
 	const handleCopyPath = async () => {
 		if (!selectedSession) return
@@ -49,7 +57,7 @@ export function Header({
 		if (!confirmed) return
 
 		deleteSession.mutate(selectedSession, {
-			onSuccess: () => onSessionDeleted(),
+			onSuccess: () => selectSession(""),
 		})
 	}
 
@@ -76,7 +84,7 @@ export function Header({
 							<select
 								id="directory-select"
 								value={selectedDirectory}
-								onChange={(e) => onDirectoryChange(e.target.value)}
+								onChange={(e) => selectDirectory(e.target.value)}
 								disabled={loadingDirectories}
 								className="w-full px-3 py-1.5 text-sm bg-gray-800 border border-gray-700 rounded text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
 							>
@@ -97,7 +105,7 @@ export function Header({
 							<select
 								id="session-select"
 								value={selectedSession}
-								onChange={(e) => onSessionChange(e.target.value)}
+								onChange={(e) => selectSession(e.target.value)}
 								disabled={!selectedDirectory || loadingSessions || sessions.length === 0}
 								className="w-full px-3 py-1.5 text-sm bg-gray-800 border border-gray-700 rounded text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
 							>

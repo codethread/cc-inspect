@@ -1,14 +1,18 @@
 import type {AgentNode, Event} from "#types"
+import {useAppStore} from "../store"
 import {MarkdownContent} from "./MarkdownContent"
 
 interface EventDetailsPanelProps {
-	event: Event | null
 	agents: AgentNode[]
-	onClose: () => void
 }
 
-export function EventDetailsPanel({event, agents, onClose}: EventDetailsPanelProps) {
+export function EventDetailsPanel({agents}: EventDetailsPanelProps) {
+	const event = useAppStore((s) => s.selectedEvent)
+	const selectEvent = useAppStore((s) => s.selectEvent)
+
 	if (!event) return null
+
+	const onClose = () => selectEvent(null)
 
 	const agent = agents.find((a) => a.id === event.agentId)
 	const agentName = agent?.name || event.agentId || "Main Agent"

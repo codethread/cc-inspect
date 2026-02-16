@@ -1,10 +1,9 @@
 import {useMemo} from "react"
 import type {AgentNode, Event, SessionData} from "#types"
+import {useAppStore} from "../store"
 
 interface GraphTimelineProps {
 	sessionData: SessionData
-	onSelectEvent: (event: Event | null) => void
-	selectedEvent: Event | null
 }
 
 interface LaneAssignment {
@@ -38,7 +37,9 @@ const LANE_COLORS: readonly string[] = [
 	"rgb(139, 92, 246)", // violet-500
 ] as const
 
-export function GraphTimeline({sessionData, onSelectEvent, selectedEvent}: GraphTimelineProps) {
+export function GraphTimeline({sessionData}: GraphTimelineProps) {
+	const selectedEvent = useAppStore((s) => s.selectedEvent)
+	const selectEvent = useAppStore((s) => s.selectEvent)
 	// Calculate lane assignments for all agents
 	const laneAssignments = useMemo(() => {
 		const assignments: LaneAssignment[] = []
@@ -231,7 +232,7 @@ export function GraphTimeline({sessionData, onSelectEvent, selectedEvent}: Graph
 						totalLanes={laneAssignments.length}
 						connections={connections.filter((c) => c.fromIndex === index || c.toIndex === index)}
 						isSelected={selectedEvent?.id === event.id}
-						onSelect={() => onSelectEvent(event)}
+						onSelect={() => selectEvent(event)}
 						agents={[sessionData.mainAgent, ...sessionData.mainAgent.children]}
 					/>
 				))}

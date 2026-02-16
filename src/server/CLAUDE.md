@@ -1,54 +1,36 @@
-# Server instructions
+# Server (src/server/)
 
-## Key Implementation Details
+## Overview
 
-### Agent Discovery
+Thin Bun server layer with REST API endpoints consuming the Claude SDK. Entry point is `index.tsx` (CLI binary via shebang). The server is a pass-through — all log parsing logic lives in `src/lib/claude/` (see `src/lib/CLAUDE.md` for the log format and parsing details).
 
-Sub-agents are discovered by scanning log entries for `toolUseResult.agentId` fields, then loading corresponding `agent-<id>.jsonl` files from the same directory as the main session log.
+## API Endpoints
 
-### Resumed Agents
+- `/api/directories` — `claude.listProjects()` → directory IDs
+- `/api/sessions?directory=<dir>` — `claude.listSessions(project)` → session handles
+- `/api/session?path=<path>` — `claude.parseSession(session)` → full session data
+- `DELETE /api/session?path=<path>` — delete a session
 
-When a Task tool is called with a `resume` parameter, events for that agent appear in both:
+Route handlers live in `routes/`.
 
-1. The agent's own log file (`agent-<id>.jsonl`)
-2. The main session log (after resume)
+## Files
 
-The parser combines events from both sources and sorts chronologically.
+- `index.tsx` — Bun server entry point, CLI flag parsing via `util.parseArgs()`. `-s/--session` pre-validates via `claude.parseSession()`
+- `routes/` — Thin route handlers delegating to the Claude SDK
+- `utils.ts` — Path traversal validation (`isValidDirectory`, `isValidSessionPath`) and constants
 
-### Tool Use Matching
+## Security
 
-To extract agent metadata (from Task tool parameters like `description`, `model`, `subagent_type`), the parser:
-
-1. Finds tool results with `agentId` in user messages
-2. Extracts `tool_use_id` from the tool_result content
-3. Searches backward for assistant messages containing matching `tool_use` with that ID
-4. Extracts input parameters from the tool_use
-
-### Security
-
-Directory and session path parameters are validated to prevent path traversal attacks. All paths must be within `~/.claude/projects/`.
+Path traversal validation is a server concern, not an SDK concern. All directory/session path parameters are validated to ensure they stay within `~/.claude/projects/`.
 
 ## Bun-Specific Patterns
 
 Default to using Bun instead of Node.js:
 
-- Use `bun <file>` instead of `node <file>` or `ts-node <file>`
-- Use `bun test` instead of `jest` or `vitest`
-- Use `bun build <file.html|file.ts|file.css>` instead of `webpack` or `esbuild`
-- Use `bun install` instead of `npm install` or `yarn install` or `pnpm install`
-- Use `bun run <script>` instead of `npm run <script>` or `yarn run <script>` or `pnpm run <script>`
-- Bun automatically loads .env, so don't use dotenv
+- `Bun.serve()` for HTTP (supports WebSockets, HTTPS, routes). Don't use `express`
+- `Bun.file` over `node:fs` readFile/writeFile
+- Bun automatically loads .env — don't use dotenv
 
-### Bun APIs
+### Frontend Serving
 
-- `Bun.serve()` supports WebSockets, HTTPS, and routes. Don't use `express`.
-- `bun:sqlite` for SQLite. Don't use `better-sqlite3`.
-- `Bun.redis` for Redis. Don't use `ioredis`.
-- `Bun.sql` for Postgres. Don't use `pg` or `postgres.js`.
-- `WebSocket` is built-in. Don't use `ws`.
-- Prefer `Bun.file` over `node:fs`'s readFile/writeFile
-- Bun.$`ls` instead of execa
-
-### Frontend with Bun
-
-HTML imports with `Bun.serve()` support React, CSS, and Tailwind without Vite. HTML files can import `.tsx`, `.jsx`, or `.js` files directly and Bun's bundler will transpile & bundle automatically. `<link>` tags can point to stylesheets and Bun's CSS bundler will bundle them.
+HTML imports with `Bun.serve()` support React, CSS, and Tailwind without Vite. HTML files can import `.tsx`/`.jsx`/`.js` directly and Bun's bundler transpiles and bundles automatically. `<link>` tags can point to stylesheets and Bun's CSS bundler handles them.
