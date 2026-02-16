@@ -156,55 +156,46 @@ Once the plan is finalised, execution follows a structured loop using beads for 
 
 The execution loop alternates between **worker agents** (stateless, task-focused) and an **architect agent** (stateful, epic-aware).
 
-```
-┌─────────────────────────────────────────────┐
-│                   EPIC                      │
-│            (source of truth)                │
-└──────────────────┬──────────────────────────┘
-                   │
-         ┌─────────▼──────────┐
-         │  Architect creates  │
-         │   next task batch   │◄──────────────┐
-         └─────────┬──────────┘               │
-                   │                          │
-         ┌─────────▼──────────┐               │
-         │  Worker agents      │               │
-         │  complete tasks     │               │
-         └─────────┬──────────┘               │
-                   │                          │
-         ┌─────────▼──────────┐               │
-         │  Git commit         │               │
-         │  (reference tasks)  │               │
-         └─────────┬──────────┘               │
-                   │                          │
-         ┌─────────▼──────────┐     yes       │
-         │  Architect review:  ├──────────────┘
-         │  more work needed?  │
-         └─────────┬──────────┘
-                   │ no
-         ┌─────────▼──────────┐
-         │  User review task   │
-         │  (final gate)       │
-         └─────────────────────┘
+```mermaid
+flowchart TD
+    EPIC["EPIC<br/>(source of truth)"]
+    ARCHITECT["Architect creates<br/>next task batch"]
+    WORKERS["Worker agents<br/>complete tasks"]
+    REVIEW["Architect review<br/>quality gate"]
+    SATISFIED{satisfied?}
+    REWORK["Rework: send back<br/>to worker agents"]
+    COMMIT["Git commit<br/>(reference tasks)"]
+    MORE{More work needed?<br/>epic evolution}
+    USER["User review task<br/>(final gate)"]
+
+    EPIC --> ARCHITECT
+    ARCHITECT --> WORKERS
+    WORKERS --> REVIEW
+    REVIEW --> SATISFIED
+    SATISFIED -->|no| REWORK
+    REWORK --> WORKERS
+    SATISFIED -->|yes| COMMIT
+    COMMIT --> MORE
+    MORE -->|yes| ARCHITECT
+    MORE -->|no| USER
 ```
 
 **Worker agents** are stateless. They pick up tasks from `bd ready`, complete them, and report back. They have full context from the task description and can see the parent epic via `bd show`. They do not need to understand the broader plan beyond their task scope.
 
 **The architect agent** is stateful and responsible for:
 
-- Reviewing completed work against the epic after each batch of tasks
-- Verifying that what was built matches the epic's intent
+- **Quality gate**: reviewing completed work before committing. If the work doesn't meet standards — e.g. code doesn't align with interfaces outlined in the plan, test structure is wrong, or it drifts from the intended architecture — the architect sends it back to the worker agents for rework. Work is only committed once the architect is satisfied.
+- **Epic evolution**: if workers discover something that changes the approach (e.g. a planned library doesn't work but a viable alternative exists), the architect can adapt the epic and create new tasks accordingly. This is distinct from quality issues — it's about the plan evolving, not about substandard work.
 - Creating the next batch of tasks based on what remains
-- Handling deviations: if something went wrong, the architect either creates corrective tasks or escalates to the user to discuss rollback
-- Updating the epic description if the implementation approach needs to evolve - but only with careful consideration that changes stay aligned with the original requirements
+- Escalating to the user only when a deviation fundamentally contradicts the original requirements (see Autonomy and escalation below)
 
 #### Git workflow during execution
 
-After each batch of tasks is completed, commit the work on the feature branch:
+The architect commits only after reviewing and approving the work:
 
-- Stage and commit after each completed task batch
+- Stage and commit after the architect is satisfied with a task batch
 - Reference beads task IDs in commit messages for traceability between git history and beads
-- This creates a reviewable trail where commits map to completed tasks, even though beads data itself is not in git
+- This creates a reviewable trail where commits map to approved, completed tasks — even though beads data itself is not in git
 
 #### Autonomy and escalation
 
