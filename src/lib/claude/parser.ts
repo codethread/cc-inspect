@@ -1,7 +1,7 @@
 // Parser for Claude Code session logs
 
-import {dirname, join} from "node:path"
-import type {ZodError} from "zod"
+import {join} from "node:path"
+import {ParseError} from "./errors"
 import type {
 	AgentNode,
 	Event,
@@ -13,123 +13,54 @@ import type {
 	ToolResultContent,
 	ToolUseContent,
 	ToolUseResult,
-} from "#types"
-import {LogEntrySchema} from "#types"
+} from "./types"
+import {LogEntrySchema} from "./types"
 
 /**
- * Detailed error information for parse failures
+ * Interface for reading files from the filesystem.
+ * Allows for dependency injection and testing with alternative implementations.
  */
-export class ParseError extends Error {
-	public readonly filePath: string
-	public readonly lineNumber: number
-	public readonly rawLine: string
-	public readonly zodError?: ZodError
-
-	constructor(options: {
-		message: string
-		filePath: string
-		lineNumber: number
-		rawLine: string
-		zodError?: ZodError
-	}) {
-		super(options.message)
-		this.name = "ParseError"
-		this.filePath = options.filePath
-		this.lineNumber = options.lineNumber
-		this.rawLine = options.rawLine
-		this.zodError = options.zodError
-	}
-
-	override toString(): string {
-		const lines = [
-			`${this.name}: ${this.message}`,
-			`  File: ${this.filePath}`,
-			`  Line: ${this.lineNumber}`,
-			`  Raw content (first 200 chars): ${this.rawLine.substring(0, 200)}${this.rawLine.length > 200 ? "..." : ""}`,
-		]
-
-		if (this.zodError) {
-			lines.push(`  Validation errors:`)
-
-			// Parse the original JSON to show actual values
-			let parsedData: unknown
-			try {
-				parsedData = JSON.parse(this.rawLine)
-			} catch {
-				parsedData = null
-			}
-
-			for (const issue of this.zodError.issues) {
-				const pathStr = issue.path.length > 0 ? issue.path.join(" → ") : "(root)"
-				lines.push(`\n    [${issue.code}] at ${pathStr}`)
-				lines.push(`      Message: ${issue.message}`)
-
-				// Show expected/received for type errors
-				if (issue.code === "invalid_type" && "expected" in issue && "received" in issue) {
-					lines.push(`      Expected: ${String(issue.expected)}`)
-					lines.push(`      Received: ${String(issue.received)}`)
-				}
-
-				// Show actual value if we can extract it
-				if (parsedData && issue.path.length > 0) {
-					try {
-						let value: unknown = parsedData
-						for (const key of issue.path) {
-							if (value && typeof value === "object" && typeof key !== "symbol" && key in value) {
-								value = (value as Record<string | number, unknown>)[key]
-							}
-						}
-						const valueStr = JSON.stringify(value)
-						lines.push(
-							`      Actual value: ${valueStr.length > 100 ? `${valueStr.substring(0, 100)}...` : valueStr}`,
-						)
-					} catch {
-						// Can't extract value, skip it
-					}
-				}
-
-				// Show valid options for enums (checking property existence dynamically)
-				if ("options" in issue && Array.isArray(issue.options)) {
-					lines.push(`      Valid options: ${issue.options.join(", ")}`)
-				}
-
-				// Show constraints for size validations
-				if (issue.code === "too_small" && "minimum" in issue && "inclusive" in issue && "type" in issue) {
-					lines.push(
-						`      Minimum ${issue.inclusive ? "(inclusive)" : "(exclusive)"}: ${String(issue.minimum)}`,
-					)
-					lines.push(`      Validation type: ${String(issue.type)}`)
-				}
-				if (issue.code === "too_big" && "maximum" in issue && "inclusive" in issue && "type" in issue) {
-					lines.push(
-						`      Maximum ${issue.inclusive ? "(inclusive)" : "(exclusive)"}: ${String(issue.maximum)}`,
-					)
-					lines.push(`      Validation type: ${String(issue.type)}`)
-				}
-
-				// Show unrecognized keys
-				if (issue.code === "unrecognized_keys" && "keys" in issue && Array.isArray(issue.keys)) {
-					lines.push(`      Unrecognized keys: ${issue.keys.join(", ")}`)
-				}
-			}
-		}
-
-		return lines.join("\n")
-	}
+export interface FileReader {
+	readText(path: string): Promise<string>
+	exists(path: string): Promise<boolean>
 }
 
-export async function parseSessionLogs(sessionLogPath: string): Promise<SessionData> {
-	const logDirectory = dirname(sessionLogPath)
-	const sessionId = extractSessionId(sessionLogPath)
+/**
+ * Default FileReader implementation using Bun.file API.
+ */
+export const bunFileReader: FileReader = {
+	async readText(path: string): Promise<string> {
+		const file = Bun.file(path)
+		return await file.text()
+	},
+	async exists(path: string): Promise<boolean> {
+		const file = Bun.file(path)
+		return await file.exists()
+	},
+}
+
+export async function parseSessionLogs(
+	sessionFilePath: string,
+	sessionAgentDir: string,
+	reader: FileReader,
+): Promise<SessionData> {
+	const sessionId = extractSessionId(sessionFilePath)
 
 	// Parse main session log
-	const mainLogEntries = await parseJsonlFile(sessionLogPath)
+	const mainLogEntries = await parseJsonlFile(sessionFilePath, reader)
 
 	// Find sub-agent logs that are referenced in this session
-	const agentLogs = await findAgentLogs(logDirectory, mainLogEntries, sessionId)
+	const agentLogs = await findAgentLogs(sessionAgentDir, mainLogEntries, reader)
 
 	// Build agent tree
-	const mainAgent = await buildAgentTree({sessionId, mainLogEntries, agentLogs, logDirectory})
+	const mainAgent = await buildAgentTree({
+		sessionId,
+		sessionFilePath,
+		mainLogEntries,
+		sessionAgentDir,
+		agentLogs,
+		reader,
+	})
 
 	// Extract all events chronologically
 	const allEvents = extractAllEvents(mainAgent)
@@ -138,13 +69,12 @@ export async function parseSessionLogs(sessionLogPath: string): Promise<SessionD
 		sessionId,
 		mainAgent,
 		allEvents,
-		logDirectory,
+		logDirectory: sessionAgentDir,
 	}
 }
 
-async function parseJsonlFile(filePath: string): Promise<LogEntry[]> {
-	const file = Bun.file(filePath)
-	const content = await file.text()
+async function parseJsonlFile(filePath: string, reader: FileReader): Promise<LogEntry[]> {
+	const content = await reader.readText(filePath)
 
 	const lines = content.split("\n").filter((line) => line.trim())
 	const entries: LogEntry[] = []
@@ -221,9 +151,9 @@ function normalizeToolUseResult(toolUseResult: LogEntry["toolUseResult"]): ToolU
 }
 
 async function findAgentLogs(
-	logDirectory: string,
+	sessionAgentDir: string,
 	mainLogEntries: LogEntry[],
-	sessionId: string,
+	reader: FileReader,
 ): Promise<Map<string, string>> {
 	// Extract agent IDs that were actually spawned in this session
 	const agentIds = new Set<string>()
@@ -254,13 +184,12 @@ async function findAgentLogs(
 		}
 	}
 
-	// Load agent logs from session-specific subagents directory
+	// Load agent logs from session-specific agent directory
 	const agentLogs = new Map<string, string>()
 	for (const agentId of agentIds) {
-		const logPath = join(logDirectory, sessionId, "subagents", `agent-${agentId}.jsonl`)
+		const logPath = join(sessionAgentDir, `agent-${agentId}.jsonl`)
 		try {
-			const file = Bun.file(logPath)
-			const exists = await file.exists()
+			const exists = await reader.exists(logPath)
 			if (exists) {
 				agentLogs.set(agentId, logPath)
 			} else {
@@ -288,11 +217,13 @@ function extractMainAgentModel(logEntries: LogEntry[]): string | undefined {
 
 async function buildAgentTree(options: {
 	sessionId: string
+	sessionFilePath: string
 	mainLogEntries: LogEntry[]
+	sessionAgentDir: string
 	agentLogs: Map<string, string>
-	logDirectory: string
+	reader: FileReader
 }): Promise<AgentNode> {
-	const {sessionId, mainLogEntries, agentLogs, logDirectory} = options
+	const {sessionId, sessionFilePath, mainLogEntries, agentLogs, reader} = options
 
 	// Extract model from the first assistant message
 	const mainModel = extractMainAgentModel(mainLogEntries)
@@ -305,12 +236,12 @@ async function buildAgentTree(options: {
 		parent: null,
 		children: [],
 		events: parseEvents(mainLogEntries, sessionId, null),
-		logPath: join(logDirectory, `${sessionId}.jsonl`),
+		logPath: sessionFilePath,
 	}
 
 	// Parse sub-agent logs and add as children
 	for (const [agentId, logPath] of agentLogs) {
-		const agentEntries = await parseJsonlFile(logPath)
+		const agentEntries = await parseJsonlFile(logPath, reader)
 		const agentInfo = extractAgentInfo(mainLogEntries, agentId)
 
 		// Extract model from agent's own log (first assistant message)

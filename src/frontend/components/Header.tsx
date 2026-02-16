@@ -1,5 +1,5 @@
 import {useState} from "react"
-import type {Session, SessionData} from "#types"
+import type {SerializedSessionHandle, SessionData} from "#types"
 import {useDeleteSession} from "../api"
 
 interface HeaderProps {
@@ -8,7 +8,7 @@ interface HeaderProps {
 	selectedDirectory: string
 	onDirectoryChange: (dir: string) => void
 	loadingDirectories: boolean
-	sessions: Session[]
+	sessions: SerializedSessionHandle[]
 	selectedSession: string
 	onSessionChange: (sessionPath: string) => void
 	loadingSessions: boolean

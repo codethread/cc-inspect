@@ -1,0 +1,2 @@
+{"type":"user","uuid":"uuid-sub1","parentUuid":null,"timestamp":"2024-01-15T11:00:02.000Z","sessionId":"session-with-agents","agentId":"abc1234","message":{"role":"user","content":"Look at the codebase and provide insights"}}
+{"type":"assistant","uuid":"uuid-sub2","parentUuid":"uuid-sub1","timestamp":"2024-01-15T11:00:05.000Z","sessionId":"session-with-agents","agentId":"abc1234","message":{"role":"assistant","content":[{"type":"text","text":"I'll analyze the codebase now."}],"model":"claude-sonnet-4-5"}}

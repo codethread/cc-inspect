@@ -1,5 +1,5 @@
-import type {SessionDataResponse} from "#types"
-import {ParseError, parseSessionLogs} from "../parser"
+import {dirname} from "node:path"
+import {Claude, ParseError, type SessionDataResponse} from "#types"
 import {isValidSessionPath} from "../utils"
 
 // API endpoint to load and parse a specific session
@@ -33,7 +33,26 @@ export async function sessionHandler(req: Request, cliSessionPath?: string): Pro
 	try {
 		// Parse the session
 		console.log(`📖 Parsing session logs: ${sessionPath}`)
-		const sessionData = await parseSessionLogs(sessionPath)
+
+		// Extract components from the session path
+		// Path structure: /.../projects/<project>/<session-id>.jsonl
+		const projectDir = dirname(sessionPath)
+		const filename = sessionPath.split("/").pop() || ""
+		const sessionId = filename.replace(".jsonl", "")
+
+		// Construct SessionHandle
+		const sessionHandle = {
+			filename,
+			path: sessionPath,
+			sessionId,
+			modifiedAt: new Date(), // Not used during parsing
+			size: 0, // Not used during parsing
+		}
+
+		// Initialize Claude SDK
+		const claude = new Claude({path: dirname(projectDir)})
+		const sessionData = await claude.parseSession(sessionHandle)
+
 		console.log(
 			`✅ Parsed ${sessionData.allEvents.length} events from ${sessionData.mainAgent.children.length + 1} agents`,
 		)

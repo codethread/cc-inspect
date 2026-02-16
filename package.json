@@ -10,6 +10,7 @@
     "dev": "bun --hot src/server/index.tsx",
     "start": "bun src/server/index.tsx",
     "build": "bun run build.ts",
+    "test": "bun test",
     "typecheck": "tsc --noEmit",
     "fmt": "biome format --write .",
     "lint": "biome lint .",
