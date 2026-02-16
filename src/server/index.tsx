@@ -1,8 +1,9 @@
 #!/usr/bin/env bun
+import {basename, dirname, join} from "node:path"
 import {serve} from "bun"
 import {parseArgs} from "util"
 import index from "../frontend/index.html"
-import {parseSessionLogs} from "./parser"
+import {Claude} from "../lib/claude"
 import {directoriesHandler} from "./routes/directories"
 import {sessionHandler} from "./routes/session"
 import {sessionDeleteHandler} from "./routes/session-delete"
@@ -41,11 +42,18 @@ Examples:
 	// Pre-load session if provided via CLI (for validation)
 	if (values.session) {
 		cliSessionPath = values.session as string
-		console.log(`📖 Validating session logs: ${cliSessionPath}`)
+		console.log(`Validating session logs: ${cliSessionPath}`)
 		try {
-			const sessionData = await parseSessionLogs(cliSessionPath)
+			const sessionId = basename(cliSessionPath).replace(".jsonl", "")
+			const projectDir = dirname(cliSessionPath)
+			const claude = new Claude({path: dirname(projectDir)})
+			const sessionData = await claude.parseSession({
+				id: sessionId,
+				sessionFilePath: cliSessionPath,
+				sessionAgentDir: join(projectDir, sessionId, "subagents"),
+			})
 			console.log(
-				`✅ Validated ${sessionData.allEvents.length} events from ${sessionData.mainAgent.children.length + 1} agents`,
+				`Validated ${sessionData.allEvents.length} events from ${sessionData.mainAgent.children.length + 1} agents`,
 			)
 		} catch (error) {
 			console.error("Failed to parse session logs:", error)
@@ -68,9 +76,9 @@ Examples:
 		development: false,
 	})
 
-	console.log(`🚀 Server running at ${server.url}`)
+	console.log(`Server running at ${server.url}`)
 	if (!values.session) {
-		console.log(`📁 Select a session from the UI to view`)
+		console.log(`Select a session from the UI to view`)
 	}
 }
 

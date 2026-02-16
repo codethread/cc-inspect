@@ -1,31 +1,15 @@
-import {readdir} from "node:fs/promises"
-import {join} from "node:path"
 import type {DirectoriesResponse} from "#types"
+import {Claude} from "../../lib/claude"
 import {CLAUDE_PROJECTS_DIR} from "../utils"
 
 // API endpoint to get list of project directories
 export async function directoriesHandler(): Promise<Response> {
 	try {
-		const entries = await readdir(CLAUDE_PROJECTS_DIR, {withFileTypes: true})
-		const directories = entries
-			.filter((entry) => entry.isDirectory())
-			.map((entry) => entry.name)
-			.sort()
+		const claude = new Claude({path: CLAUDE_PROJECTS_DIR})
+		const projects = await claude.listProjects()
+		const directories = projects.map((p) => p.id)
 
-		// Filter to only directories that contain session files
-		const validDirectories: string[] = []
-		for (const dir of directories) {
-			const dirPath = join(CLAUDE_PROJECTS_DIR, dir)
-			try {
-				const files = await readdir(dirPath)
-				const hasSessionFiles = files.some((file) => file.endsWith(".jsonl") && !file.startsWith("agent-"))
-				if (hasSessionFiles) {
-					validDirectories.push(dir)
-				}
-			} catch {}
-		}
-
-		const response: DirectoriesResponse = {status: "success", directories: validDirectories}
+		const response: DirectoriesResponse = {status: "success", directories}
 		return new Response(JSON.stringify(response), {
 			headers: {"Content-Type": "application/json"},
 		})

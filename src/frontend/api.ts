@@ -1,5 +1,11 @@
 import {useMutation, useQuery, useQueryClient} from "@tanstack/react-query"
-import type {DirectoriesResponse, Session, SessionData, SessionDataResponse, SessionsResponse} from "#types"
+import type {
+	DirectoriesResponse,
+	SessionData,
+	SessionDataResponse,
+	SessionHandle,
+	SessionsResponse,
+} from "#types"
 
 async function fetchApi<T extends {status: string}>(url: string): Promise<T> {
 	const res = await fetch(url)
@@ -23,7 +29,7 @@ export function useDirectories() {
 }
 
 export function useSessions(directory: string) {
-	return useQuery<Session[]>({
+	return useQuery<SessionHandle[]>({
 		queryKey: ["sessions", directory],
 		queryFn: async () => {
 			const data = await fetchApi<SessionsResponse>(
