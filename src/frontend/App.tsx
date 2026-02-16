@@ -55,7 +55,11 @@ export function App() {
 
 	// Clear selectedSession if it's not in the loaded list
 	useEffect(() => {
-		if (sessions.length > 0 && selectedSession && !sessions.find((s) => s.path === selectedSession)) {
+		if (
+			sessions.length > 0 &&
+			selectedSession &&
+			!sessions.find((s) => s.sessionFilePath === selectedSession)
+		) {
 			setSelectedSession("")
 		}
 	}, [sessions, selectedSession])

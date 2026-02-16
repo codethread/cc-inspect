@@ -15,7 +15,8 @@
     "lint": "biome lint .",
     "check": "biome check .",
     "fix": "biome check --write --unsafe --log-level=error .",
-    "verify": "bun run typecheck && bun run lint && bun fmt"
+    "verify": "bun run typecheck && bun run lint && bun fmt",
+    "test": "bun test"
   },
   "imports": {
     "#types": "./src/types.ts"

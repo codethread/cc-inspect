@@ -1,5 +1,5 @@
 import {useState} from "react"
-import type {Session, SessionData} from "#types"
+import type {SessionData, SessionHandle} from "#types"
 import {useDeleteSession} from "../api"
 
 interface HeaderProps {
@@ -8,7 +8,7 @@ interface HeaderProps {
 	selectedDirectory: string
 	onDirectoryChange: (dir: string) => void
 	loadingDirectories: boolean
-	sessions: Session[]
+	sessions: SessionHandle[]
 	selectedSession: string
 	onSessionChange: (sessionPath: string) => void
 	loadingSessions: boolean
@@ -109,8 +109,8 @@ export function Header({
 											: "-- Select session --"}
 								</option>
 								{sessions.map((session) => (
-									<option key={session.sessionId} value={session.path}>
-										{session.sessionId} ({new Date(session.modifiedAt).toLocaleString()})
+									<option key={session.id} value={session.sessionFilePath}>
+										{session.id}
 									</option>
 								))}
 							</select>

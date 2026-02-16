@@ -1,0 +1,5 @@
+{"type":"user","uuid":"u1","parentUuid":null,"timestamp":"2025-01-15T10:00:00.000Z","sessionId":"sess-001","message":{"role":"user","content":"Hello, please help me with a task"}}
+{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2025-01-15T10:00:01.000Z","sessionId":"sess-001","message":{"role":"assistant","model":"claude-sonnet-4-20250514","content":[{"type":"thinking","thinking":"Let me think about this...","signature":"sig1"},{"type":"text","text":"I'd be happy to help! Let me look into that."}]}}
+{"type":"assistant","uuid":"a2","parentUuid":"u1","timestamp":"2025-01-15T10:00:02.000Z","sessionId":"sess-001","message":{"role":"assistant","model":"claude-sonnet-4-20250514","content":[{"type":"tool_use","id":"tu1","name":"Read","input":{"file_path":"/tmp/test.txt"}}]}}
+{"type":"user","uuid":"u2","parentUuid":"a2","timestamp":"2025-01-15T10:00:03.000Z","sessionId":"sess-001","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu1","content":"file contents here"}]}}
+{"type":"summary","summary":"User asked for help with a task. Assistant read a file.","leafUuid":"u2","timestamp":"2025-01-15T10:00:04.000Z"}

@@ -1,7 +1,7 @@
 // Parser for Claude Code session logs
 
-import {dirname, join} from "node:path"
-import type {ZodError} from "zod"
+import {join} from "node:path"
+import {ParseError} from "./errors"
 import type {
 	AgentNode,
 	Event,
@@ -13,123 +13,40 @@ import type {
 	ToolResultContent,
 	ToolUseContent,
 	ToolUseResult,
-} from "#types"
-import {LogEntrySchema} from "#types"
+} from "./types"
+import {LogEntrySchema} from "./types"
 
-/**
- * Detailed error information for parse failures
- */
-export class ParseError extends Error {
-	public readonly filePath: string
-	public readonly lineNumber: number
-	public readonly rawLine: string
-	public readonly zodError?: ZodError
-
-	constructor(options: {
-		message: string
-		filePath: string
-		lineNumber: number
-		rawLine: string
-		zodError?: ZodError
-	}) {
-		super(options.message)
-		this.name = "ParseError"
-		this.filePath = options.filePath
-		this.lineNumber = options.lineNumber
-		this.rawLine = options.rawLine
-		this.zodError = options.zodError
-	}
-
-	override toString(): string {
-		const lines = [
-			`${this.name}: ${this.message}`,
-			`  File: ${this.filePath}`,
-			`  Line: ${this.lineNumber}`,
-			`  Raw content (first 200 chars): ${this.rawLine.substring(0, 200)}${this.rawLine.length > 200 ? "..." : ""}`,
-		]
-
-		if (this.zodError) {
-			lines.push(`  Validation errors:`)
-
-			// Parse the original JSON to show actual values
-			let parsedData: unknown
-			try {
-				parsedData = JSON.parse(this.rawLine)
-			} catch {
-				parsedData = null
-			}
-
-			for (const issue of this.zodError.issues) {
-				const pathStr = issue.path.length > 0 ? issue.path.join(" → ") : "(root)"
-				lines.push(`\n    [${issue.code}] at ${pathStr}`)
-				lines.push(`      Message: ${issue.message}`)
-
-				// Show expected/received for type errors
-				if (issue.code === "invalid_type" && "expected" in issue && "received" in issue) {
-					lines.push(`      Expected: ${String(issue.expected)}`)
-					lines.push(`      Received: ${String(issue.received)}`)
-				}
-
-				// Show actual value if we can extract it
-				if (parsedData && issue.path.length > 0) {
-					try {
-						let value: unknown = parsedData
-						for (const key of issue.path) {
-							if (value && typeof value === "object" && typeof key !== "symbol" && key in value) {
-								value = (value as Record<string | number, unknown>)[key]
-							}
-						}
-						const valueStr = JSON.stringify(value)
-						lines.push(
-							`      Actual value: ${valueStr.length > 100 ? `${valueStr.substring(0, 100)}...` : valueStr}`,
-						)
-					} catch {
-						// Can't extract value, skip it
-					}
-				}
-
-				// Show valid options for enums (checking property existence dynamically)
-				if ("options" in issue && Array.isArray(issue.options)) {
-					lines.push(`      Valid options: ${issue.options.join(", ")}`)
-				}
-
-				// Show constraints for size validations
-				if (issue.code === "too_small" && "minimum" in issue && "inclusive" in issue && "type" in issue) {
-					lines.push(
-						`      Minimum ${issue.inclusive ? "(inclusive)" : "(exclusive)"}: ${String(issue.minimum)}`,
-					)
-					lines.push(`      Validation type: ${String(issue.type)}`)
-				}
-				if (issue.code === "too_big" && "maximum" in issue && "inclusive" in issue && "type" in issue) {
-					lines.push(
-						`      Maximum ${issue.inclusive ? "(inclusive)" : "(exclusive)"}: ${String(issue.maximum)}`,
-					)
-					lines.push(`      Validation type: ${String(issue.type)}`)
-				}
-
-				// Show unrecognized keys
-				if (issue.code === "unrecognized_keys" && "keys" in issue && Array.isArray(issue.keys)) {
-					lines.push(`      Unrecognized keys: ${issue.keys.join(", ")}`)
-				}
-			}
-		}
-
-		return lines.join("\n")
-	}
+/** Abstraction over file reading for testability */
+export interface FileReader {
+	readText(path: string): Promise<string>
+	exists(path: string): Promise<boolean>
 }
 
-export async function parseSessionLogs(sessionLogPath: string): Promise<SessionData> {
-	const logDirectory = dirname(sessionLogPath)
-	const sessionId = extractSessionId(sessionLogPath)
+/** Default implementation using Bun.file */
+export const bunFileReader: FileReader = {
+	async readText(path: string) {
+		return Bun.file(path).text()
+	},
+	async exists(path: string) {
+		return Bun.file(path).exists()
+	},
+}
+
+export async function parseSessionLogs(
+	sessionFilePath: string,
+	sessionAgentDir: string,
+	reader: FileReader,
+): Promise<SessionData> {
+	const sessionId = extractSessionId(sessionFilePath)
 
 	// Parse main session log
-	const mainLogEntries = await parseJsonlFile(sessionLogPath)
+	const mainLogEntries = await parseJsonlFile(sessionFilePath, reader)
 
 	// Find sub-agent logs that are referenced in this session
-	const agentLogs = await findAgentLogs(logDirectory, mainLogEntries, sessionId)
+	const agentLogs = await findAgentLogs(sessionAgentDir, mainLogEntries, reader)
 
 	// Build agent tree
-	const mainAgent = await buildAgentTree({sessionId, mainLogEntries, agentLogs, logDirectory})
+	const mainAgent = await buildAgentTree({sessionId, mainLogEntries, agentLogs, sessionFilePath, reader})
 
 	// Extract all events chronologically
 	const allEvents = extractAllEvents(mainAgent)
@@ -138,13 +55,12 @@ export async function parseSessionLogs(sessionLogPath: string): Promise<SessionD
 		sessionId,
 		mainAgent,
 		allEvents,
-		logDirectory,
+		logDirectory: sessionFilePath.split("/").slice(0, -1).join("/"),
 	}
 }
 
-async function parseJsonlFile(filePath: string): Promise<LogEntry[]> {
-	const file = Bun.file(filePath)
-	const content = await file.text()
+export async function parseJsonlFile(filePath: string, reader: FileReader): Promise<LogEntry[]> {
+	const content = await reader.readText(filePath)
 
 	const lines = content.split("\n").filter((line) => line.trim())
 	const entries: LogEntry[] = []
@@ -202,7 +118,7 @@ async function parseJsonlFile(filePath: string): Promise<LogEntry[]> {
 	return entries
 }
 
-function extractSessionId(logPath: string): string {
+export function extractSessionId(logPath: string): string {
 	const filename = logPath.split("/").pop() || ""
 	return filename.replace(".jsonl", "")
 }
@@ -213,17 +129,17 @@ function extractSessionId(logPath: string): string {
  * If it's a string, returns undefined.
  * If it's an object, returns it as-is.
  */
-function normalizeToolUseResult(toolUseResult: LogEntry["toolUseResult"]): ToolUseResult | undefined {
+export function normalizeToolUseResult(toolUseResult: LogEntry["toolUseResult"]): ToolUseResult | undefined {
 	if (!toolUseResult || typeof toolUseResult === "string") {
 		return undefined
 	}
 	return Array.isArray(toolUseResult) ? toolUseResult[0] : toolUseResult
 }
 
-async function findAgentLogs(
-	logDirectory: string,
+export async function findAgentLogs(
+	sessionAgentDir: string,
 	mainLogEntries: LogEntry[],
-	sessionId: string,
+	reader: FileReader,
 ): Promise<Map<string, string>> {
 	// Extract agent IDs that were actually spawned in this session
 	const agentIds = new Set<string>()
@@ -240,27 +156,22 @@ async function findAgentLogs(
 			const content = Array.isArray(entry.message.content) ? entry.message.content : []
 			for (const item of content) {
 				if (item.type === "tool_result") {
-					const toolResult = item as ToolResultContent
-					// Check if content mentions agentId
-					if (typeof toolResult.content === "string") {
-						// For tool results from Task tool, agentId is in toolUseResult
-						const result = normalizeToolUseResult(entry.toolUseResult)
-						if (result?.agentId) {
-							agentIds.add(result.agentId)
-						}
+					// For tool results from Task tool, agentId is in toolUseResult
+					const result = normalizeToolUseResult(entry.toolUseResult)
+					if (result?.agentId) {
+						agentIds.add(result.agentId)
 					}
 				}
 			}
 		}
 	}
 
-	// Load agent logs from session-specific subagents directory
+	// Load agent logs from the session-specific subagents directory
 	const agentLogs = new Map<string, string>()
 	for (const agentId of agentIds) {
-		const logPath = join(logDirectory, sessionId, "subagents", `agent-${agentId}.jsonl`)
+		const logPath = join(sessionAgentDir, `agent-${agentId}.jsonl`)
 		try {
-			const file = Bun.file(logPath)
-			const exists = await file.exists()
+			const exists = await reader.exists(logPath)
 			if (exists) {
 				agentLogs.set(agentId, logPath)
 			} else {
@@ -277,7 +188,7 @@ async function findAgentLogs(
 /**
  * Extract the model from the main agent's first assistant message
  */
-function extractMainAgentModel(logEntries: LogEntry[]): string | undefined {
+export function extractMainAgentModel(logEntries: LogEntry[]): string | undefined {
 	for (const entry of logEntries) {
 		if (entry.type === "assistant" && entry.message?.model) {
 			return entry.message.model
@@ -290,9 +201,10 @@ async function buildAgentTree(options: {
 	sessionId: string
 	mainLogEntries: LogEntry[]
 	agentLogs: Map<string, string>
-	logDirectory: string
+	sessionFilePath: string
+	reader: FileReader
 }): Promise<AgentNode> {
-	const {sessionId, mainLogEntries, agentLogs, logDirectory} = options
+	const {sessionId, mainLogEntries, agentLogs, sessionFilePath, reader} = options
 
 	// Extract model from the first assistant message
 	const mainModel = extractMainAgentModel(mainLogEntries)
@@ -305,12 +217,12 @@ async function buildAgentTree(options: {
 		parent: null,
 		children: [],
 		events: parseEvents(mainLogEntries, sessionId, null),
-		logPath: join(logDirectory, `${sessionId}.jsonl`),
+		logPath: sessionFilePath,
 	}
 
 	// Parse sub-agent logs and add as children
 	for (const [agentId, logPath] of agentLogs) {
-		const agentEntries = await parseJsonlFile(logPath)
+		const agentEntries = await parseJsonlFile(logPath, reader)
 		const agentInfo = extractAgentInfo(mainLogEntries, agentId)
 
 		// Extract model from agent's own log (first assistant message)
@@ -359,7 +271,7 @@ interface ExtendedAgentInfo extends AgentInfo {
 	resumedFrom?: string
 }
 
-function extractAgentInfo(logEntries: LogEntry[], agentId: string): ExtendedAgentInfo {
+export function extractAgentInfo(logEntries: LogEntry[], agentId: string): ExtendedAgentInfo {
 	// First, find the result entry that contains this agentId
 	const resultEntry = logEntries.find((e) => {
 		if (e.type !== "user") return false
@@ -430,7 +342,11 @@ function extractAgentInfo(logEntries: LogEntry[], agentId: string): ExtendedAgen
 }
 
 // Parse events from session log that belong to a specific agent (after resume)
-function parseSessionEventsForAgent(logEntries: LogEntry[], sessionId: string, agentId: string): Event[] {
+export function parseSessionEventsForAgent(
+	logEntries: LogEntry[],
+	sessionId: string,
+	agentId: string,
+): Event[] {
 	const events: Event[] = []
 
 	// Look for tool results and assistant messages that belong to this agent
@@ -482,7 +398,7 @@ function parseSessionEventsForAgent(logEntries: LogEntry[], sessionId: string, a
 	return events
 }
 
-function parseEvents(logEntries: LogEntry[], sessionId: string, agentId: string | null): Event[] {
+export function parseEvents(logEntries: LogEntry[], sessionId: string, agentId: string | null): Event[] {
 	const events: Event[] = []
 
 	for (const entry of logEntries) {
@@ -641,7 +557,7 @@ function parseEvents(logEntries: LogEntry[], sessionId: string, agentId: string 
 	return events
 }
 
-function extractAllEvents(agent: AgentNode): Event[] {
+export function extractAllEvents(agent: AgentNode): Event[] {
 	const events = [...agent.events]
 
 	for (const child of agent.children) {

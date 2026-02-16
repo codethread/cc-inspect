@@ -16,6 +16,10 @@ cc-inspect is a web-based visualizer for Claude Code session logs. It parses `.j
 - `cc-inspect -s <path>` - Load a specific session file
 - `cc-inspect --help` - Show CLI help
 
+### Testing
+
+- `bun test` - Run test suite with Bun's built-in test runner
+
 ### Code Quality
 
 - `bun run typecheck` - Type check with TypeScript
@@ -32,55 +36,48 @@ cc-inspect is a web-based visualizer for Claude Code session logs. It parses `.j
 
 ## Architecture
 
+### Claude SDK (src/lib/claude/)
+
+Self-contained SDK for parsing Claude Code `.jsonl` session logs. Designed for future extraction as a standalone npm library.
+
+**Public API** via the `Claude` class:
+
+```ts
+const claude = new Claude({ path: '/absolute/path/to/projects/dir' })
+const projects: ProjectHandle[] = await claude.listProjects()
+const sessions: SessionHandle[] = await claude.listSessions(project)
+const sessionData: SessionData = await claude.parseSession(session)
+```
+
+**Files:**
+
+- `index.ts` — `Claude` class + re-exports (public entry point)
+- `types.ts` — All Zod schemas and inferred types for the log domain (LogEntry, Event, AgentNode, SessionData, ProjectHandle, SessionHandle)
+- `parser.ts` — Pure parsing functions (internal). Uses `FileReader` interface for dependency injection to enable testing without filesystem access
+- `errors.ts` — `ParseError` class with detailed debugging info (line numbers, Zod errors, actual values)
+- `__tests__/` — Test suite with fixtures derived from real session logs
+
+**Key patterns:**
+
+- `FileReader` DI interface (`readText`, `exists`) abstracts file reading; `bunFileReader` is the default Bun implementation
+- `ProjectHandle` and `SessionHandle` are lightweight descriptors with pre-computed absolute paths
+- `listProjects`/`listSessions` use `node:fs/promises` directly; only `.jsonl` content parsing uses `FileReader`
+
 ### Server (src/server/index.tsx)
 
-Entry point that runs a Bun server with REST API endpoints:
+Thin layer that runs a Bun server with REST API endpoints consuming the Claude SDK:
 
-- `/api/directories` - Lists project directories in `~/.claude/projects/` that contain session files
-- `/api/sessions?directory=<dir>` - Lists session files (excluding agent logs) in a directory
-- `/api/session?path=<path>` - Parses and returns full session data with events
+- `/api/directories` — `claude.listProjects()` → directory IDs
+- `/api/sessions?directory=<dir>` — `claude.listSessions(project)` → session handles
+- `/api/session?path=<path>` — `claude.parseSession(session)` → full session data
 
-The server uses path traversal validation (`isValidDirectory`, `isValidSessionPath`) to ensure requests stay within `~/.claude/projects/`.
+Path traversal validation (`isValidDirectory`, `isValidSessionPath` in `utils.ts`) is a server security concern, not an SDK concern.
 
-CLI flags are parsed with `util.parseArgs()`. If `-s/--session` is provided, the session is pre-validated on startup and served via `/api/session`.
-
-### Parser (src/parser.ts)
-
-Core parsing logic that transforms Claude Code `.jsonl` logs into structured data:
-
-1. **parseSessionLogs()** - Main entry point that:
-   - Parses the main session log file
-   - Discovers and loads sub-agent logs (files starting with `agent-<id>.jsonl`)
-   - Builds an agent tree hierarchy with parent-child relationships
-   - Extracts and chronologically sorts all events
-
-2. **parseJsonlFile()** - Reads `.jsonl` files line by line and validates each with Zod schemas
-
-3. **buildAgentTree()** - Constructs agent hierarchy by:
-   - Creating an AgentNode for the main session
-   - Parsing each sub-agent's log file and adding as children
-   - Handling resumed agents (which have events in both agent log and main session log)
-   - Extracting agent metadata (name, model, description) from Task tool uses
-
-4. **parseEvents()** - Converts log entries to typed Event objects:
-   - User messages, assistant messages, thinking blocks
-   - Tool uses (with special handling for Task tool and resume parameter)
-   - Tool results (with agentId tracking for sub-agents)
-   - Summaries
-
-5. **ParseError** - Custom error class that provides detailed debugging info including line numbers, Zod validation errors, and actual values
+CLI flags parsed with `util.parseArgs()`. `-s/--session` pre-validates via `claude.parseSession()`.
 
 ### Type System (src/types.ts)
 
-Comprehensive Zod schemas and TypeScript types for:
-
-- **LogEntry** - Raw `.jsonl` entry format with message content, tool results, metadata
-- **Event** - Processed timeline event with typed data union
-- **AgentNode** - Recursive agent tree structure with events
-- **SessionData** - Complete parsed session with agent tree and all events
-- **API responses** - Discriminated unions for `/api/*` endpoints
-
-All parsing uses Zod for runtime validation to catch schema mismatches early.
+Re-exports all SDK types via `export * from "./lib/claude"` so the `#types` import alias continues to work. Also defines app-level API response schemas (DirectoriesResponseSchema, SessionsResponseSchema, SessionDataResponseSchema) as discriminated unions for the server↔frontend contract.
 
 ### Frontend (src/frontend/App.tsx, src/frontend/frontend.tsx)
 
@@ -96,14 +93,17 @@ The app uses TanStack Query (`@tanstack/react-query`) for data fetching, with qu
 
 ## File Structure
 
-- `src/types.ts` - Zod schemas and TypeScript types
+- `src/lib/claude/` - Self-contained Claude Code SDK (types, parser, errors, Claude class)
+- `src/lib/claude/__tests__/` - SDK test suite with .jsonl fixtures
+- `src/types.ts` - Re-exports SDK types + app-level API response schemas
+- `src/server/index.tsx` - Bun server entry point (CLI binary via shebang)
+- `src/server/routes/` - Thin route handlers using Claude SDK
+- `src/server/utils.ts` - Server-level path validation and constants
 - `src/frontend/App.tsx` - Main React component with selectors and layout
 - `src/frontend/api.ts` - TanStack Query hooks and fetch helper
 - `src/frontend/frontend.tsx` - React DOM mounting with QueryClientProvider
 - `src/frontend/components/` - React UI components (timeline, event list, details panel)
 - `src/frontend/index.html` - HTML entry point that imports React app
-- `src/server/index.tsx` - Bun server entry point (CLI binary via shebang)
-- `src/server/parser.ts` - Session log parser with agent tree builder
 
 ## Code style
 
