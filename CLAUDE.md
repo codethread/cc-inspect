@@ -18,6 +18,7 @@ cc-inspect is a web-based visualizer for Claude Code session logs. It parses `.j
 
 ### Code Quality
 
+- `bun test` - Run test suite
 - `bun run typecheck` - Type check with TypeScript
 - `bun run lint` - Lint with Biome
 - `bun run fmt` - Format code with Biome
@@ -32,6 +33,23 @@ cc-inspect is a web-based visualizer for Claude Code session logs. It parses `.j
 
 ## Architecture
 
+### SDK (src/lib/claude/)
+
+Reusable SDK for parsing and analyzing Claude Code session logs. Provides a clean API for listing projects, sessions, and parsing session data.
+
+**Claude class** - Main entry point with three methods:
+- `listProjects()` - Lists project directories in `~/.claude/projects/` that contain session files
+- `listSessions(project)` - Lists session files in a project, sorted by modification time (excludes agent logs)
+- `parseSession(session)` - Parses a session file and returns full SessionData with agent tree and events
+
+**FileReader** - Interface for file I/O that enables dependency injection for testability. The default implementation uses Bun.file API.
+
+**Module structure**:
+- `index.ts` - Public API exports (Claude class and types)
+- `parser.ts` - Internal parsing logic (parseSessionLogs, buildAgentTree, parseEvents)
+- `types.ts` - All Zod schemas and TypeScript types (LogEntry, Event, AgentNode, SessionData)
+- `errors.ts` - ParseError class with detailed debugging info
+
 ### Server (src/server/index.tsx)
 
 Entry point that runs a Bun server with REST API endpoints:
@@ -44,9 +62,11 @@ The server uses path traversal validation (`isValidDirectory`, `isValidSessionPa
 
 CLI flags are parsed with `util.parseArgs()`. If `-s/--session` is provided, the session is pre-validated on startup and served via `/api/session`.
 
-### Parser (src/parser.ts)
+The server uses the Claude SDK for all parsing operations.
 
-Core parsing logic that transforms Claude Code `.jsonl` logs into structured data:
+### Parser (src/lib/claude/parser.ts)
+
+Core parsing logic that transforms Claude Code `.jsonl` logs into structured data. This is internal to the SDK and called via the Claude class:
 
 1. **parseSessionLogs()** - Main entry point that:
    - Parses the main session log file
@@ -68,16 +88,18 @@ Core parsing logic that transforms Claude Code `.jsonl` logs into structured dat
    - Tool results (with agentId tracking for sub-agents)
    - Summaries
 
-5. **ParseError** - Custom error class that provides detailed debugging info including line numbers, Zod validation errors, and actual values
+5. **ParseError** - Custom error class that provides detailed debugging info including line numbers, Zod validation errors, and actual values (exported from `errors.ts`)
 
-### Type System (src/types.ts)
+### Type System
 
-Comprehensive Zod schemas and TypeScript types for:
-
+**src/lib/claude/types.ts** - Domain types for Claude Code session logs:
 - **LogEntry** - Raw `.jsonl` entry format with message content, tool results, metadata
 - **Event** - Processed timeline event with typed data union
 - **AgentNode** - Recursive agent tree structure with events
 - **SessionData** - Complete parsed session with agent tree and all events
+
+**src/types.ts** - Re-exports SDK types and adds app-level API response types:
+- Re-exports all SDK types for convenience
 - **API responses** - Discriminated unions for `/api/*` endpoints
 
 All parsing uses Zod for runtime validation to catch schema mismatches early.
@@ -96,14 +118,18 @@ The app uses TanStack Query (`@tanstack/react-query`) for data fetching, with qu
 
 ## File Structure
 
-- `src/types.ts` - Zod schemas and TypeScript types
+- `src/lib/claude/` - Claude SDK for parsing session logs
+  - `index.ts` - Public API (Claude class)
+  - `parser.ts` - Internal parsing logic
+  - `types.ts` - Domain types and Zod schemas
+  - `errors.ts` - ParseError class
+- `src/types.ts` - Re-exports SDK types + app-level API response types
 - `src/frontend/App.tsx` - Main React component with selectors and layout
 - `src/frontend/api.ts` - TanStack Query hooks and fetch helper
 - `src/frontend/frontend.tsx` - React DOM mounting with QueryClientProvider
 - `src/frontend/components/` - React UI components (timeline, event list, details panel)
 - `src/frontend/index.html` - HTML entry point that imports React app
 - `src/server/index.tsx` - Bun server entry point (CLI binary via shebang)
-- `src/server/parser.ts` - Session log parser with agent tree builder
 
 ## Code style
 

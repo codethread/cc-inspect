@@ -2,9 +2,13 @@
 
 ## Key Implementation Details
 
+### SDK Integration
+
+The server uses the Claude SDK (`src/lib/claude/`) for all parsing operations. Parsing logic is internal to the SDK and accessed via the Claude class methods.
+
 ### Agent Discovery
 
-Sub-agents are discovered by scanning log entries for `toolUseResult.agentId` fields, then loading corresponding `agent-<id>.jsonl` files from the same directory as the main session log.
+Sub-agents are discovered by the SDK parser (`src/lib/claude/parser.ts`) by scanning log entries for `toolUseResult.agentId` fields, then loading corresponding `agent-<id>.jsonl` files from the session's agent directory.
 
 ### Resumed Agents
 
@@ -13,11 +17,11 @@ When a Task tool is called with a `resume` parameter, events for that agent appe
 1. The agent's own log file (`agent-<id>.jsonl`)
 2. The main session log (after resume)
 
-The parser combines events from both sources and sorts chronologically.
+The SDK parser combines events from both sources and sorts chronologically.
 
 ### Tool Use Matching
 
-To extract agent metadata (from Task tool parameters like `description`, `model`, `subagent_type`), the parser:
+To extract agent metadata (from Task tool parameters like `description`, `model`, `subagent_type`), the SDK parser:
 
 1. Finds tool results with `agentId` in user messages
 2. Extracts `tool_use_id` from the tool_result content
