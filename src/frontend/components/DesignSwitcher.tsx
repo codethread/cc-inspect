@@ -3,6 +3,8 @@ const DESIGNS = [
 	{path: "/v2", label: "V2", title: "Conversation"},
 	{path: "/v3", label: "V3", title: "Trace"},
 	{path: "/v4", label: "V4", title: "Columns"},
+	{path: "/v5", label: "V5", title: "Matrix"},
+	{path: "/v6", label: "V6", title: "Focus"},
 ] as const
 
 export function DesignSwitcher() {

@@ -6,6 +6,8 @@ import {DesignSwitcher} from "./components/DesignSwitcher"
 import {ColumnsView} from "./components/designs/ColumnsView"
 import {ConversationView} from "./components/designs/ConversationView"
 import {TraceView} from "./components/designs/TraceView"
+import {FocusView} from "./components/designs/FocusView"
+import {MatrixView} from "./components/designs/MatrixView"
 import {WaterfallView} from "./components/designs/WaterfallView"
 import {Header} from "./components/Header"
 import {
@@ -38,6 +40,8 @@ function getCurrentDesign(): string {
 	if (path === "/v2") return "v2"
 	if (path === "/v3") return "v3"
 	if (path === "/v4") return "v4"
+	if (path === "/v5") return "v5"
+	if (path === "/v6") return "v6"
 	return "v1"
 }
 
@@ -139,6 +143,8 @@ export function App() {
 					{design === "v2" && "Conversation"}
 					{design === "v3" && "Trace"}
 					{design === "v4" && "Columns"}
+					{design === "v5" && "Matrix"}
+					{design === "v6" && "Focus"}
 				</div>
 			</div>
 
@@ -227,6 +233,24 @@ function DesignView({
 					onFilterChange={onFilterChange}
 					selectedEvent={selectedEvent}
 					onSelectEvent={onSelectEvent}
+				/>
+			)
+		case "v5":
+			return (
+				<MatrixView
+					agents={allAgents}
+					events={filteredEvents}
+					filters={filters}
+					onFilterChange={onFilterChange}
+				/>
+			)
+		case "v6":
+			return (
+				<FocusView
+					agents={allAgents}
+					events={filteredEvents}
+					filters={filters}
+					onFilterChange={onFilterChange}
 				/>
 			)
 		default:
