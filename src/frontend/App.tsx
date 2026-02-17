@@ -5,11 +5,13 @@ import {useCliSession, useDirectories, useSessionData, useSessions} from "./api"
 import {DesignSwitcher} from "./components/DesignSwitcher"
 import {ColumnsView} from "./components/designs/ColumnsView"
 import {ConversationView} from "./components/designs/ConversationView"
-import {TraceView} from "./components/designs/TraceView"
 import {FocusView} from "./components/designs/FocusView"
 import {MatrixView} from "./components/designs/MatrixView"
+import {TraceView} from "./components/designs/TraceView"
 import {V7App} from "./components/designs/V7App"
 import {V8App} from "./components/designs/V8App"
+import {V9App} from "./components/designs/V9App"
+import {V10App} from "./components/designs/V10App"
 import {WaterfallView} from "./components/designs/WaterfallView"
 import {Header} from "./components/Header"
 import {
@@ -46,6 +48,8 @@ function getCurrentDesign(): string {
 	if (path === "/v6") return "v6"
 	if (path === "/v7") return "v7"
 	if (path === "/v8") return "v8"
+	if (path === "/v9") return "v9"
+	if (path === "/v10") return "v10"
 	return "v1"
 }
 
@@ -124,9 +128,11 @@ export function App() {
 		setSelectedSession("")
 	}
 
-	// V7 and V8 are self-contained apps that manage their own session selection
+	// V7+ are self-contained apps that manage their own session selection
 	if (design === "v7") return <V7App />
 	if (design === "v8") return <V8App />
+	if (design === "v9") return <V9App />
+	if (design === "v10") return <V10App />
 
 	return (
 		<div className="min-h-screen bg-gray-950 text-gray-100">
