@@ -1,12 +1,15 @@
 import "./index.css"
-import {useEffect, useState} from "react"
+import {useEffect, useMemo, useState} from "react"
 import type {Event} from "#types"
 import {useCliSession, useDirectories, useSessionData, useSessions} from "./api"
-import {EventDetailsPanel} from "./components/EventDetailsPanel"
-import {GraphTimeline} from "./components/GraphTimeline"
+import {DesignSwitcher} from "./components/DesignSwitcher"
+import {ColumnsView} from "./components/designs/ColumnsView"
+import {ConversationView} from "./components/designs/ConversationView"
+import {TraceView} from "./components/designs/TraceView"
+import {WaterfallView} from "./components/designs/WaterfallView"
 import {Header} from "./components/Header"
+import {collectAllAgents, createEmptyFilters, type FilterState, filterEvents} from "./components/shared"
 
-// URL parameter management
 function getUrlParams() {
 	const params = new URLSearchParams(window.location.search)
 	return {
@@ -24,10 +27,20 @@ function updateUrlParams(directory: string, sessionPath: string) {
 	window.history.replaceState({}, "", newUrl)
 }
 
+function getCurrentDesign(): string {
+	const path = window.location.pathname
+	if (path === "/v2") return "v2"
+	if (path === "/v3") return "v3"
+	if (path === "/v4") return "v4"
+	return "v1"
+}
+
 export function App() {
 	const [selectedDirectory, setSelectedDirectory] = useState(() => getUrlParams().directory)
 	const [selectedSession, setSelectedSession] = useState(() => getUrlParams().sessionPath)
 	const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
+	const [filters, setFilters] = useState<FilterState>(createEmptyFilters)
+	const design = getCurrentDesign()
 
 	const {data: directories = [], error: dirError} = useDirectories()
 	const {
@@ -46,14 +59,18 @@ export function App() {
 	const loading = selectedSession ? loadingSession : loadingCli
 	const error = dirError?.message ?? sessionsError?.message ?? sessionError?.message ?? null
 
-	// Clear selectedDirectory if it's not in the loaded list
+	const allAgents = useMemo(() => (sessionData ? collectAllAgents(sessionData.mainAgent) : []), [sessionData])
+	const filteredEvents = useMemo(
+		() => (sessionData ? filterEvents(sessionData.allEvents, filters) : []),
+		[sessionData, filters],
+	)
+
 	useEffect(() => {
 		if (directories.length > 0 && selectedDirectory && !directories.includes(selectedDirectory)) {
 			setSelectedDirectory("")
 		}
 	}, [directories, selectedDirectory])
 
-	// Clear selectedSession if it's not in the loaded list
 	useEffect(() => {
 		if (
 			sessions.length > 0 &&
@@ -64,22 +81,17 @@ export function App() {
 		}
 	}, [sessions, selectedSession])
 
-	// Update URL when directory or session changes
 	useEffect(() => {
 		updateUrlParams(selectedDirectory, selectedSession)
 	}, [selectedDirectory, selectedSession])
 
-	// Handle keyboard shortcuts
+	// Redirect bare "/" to "/v1" preserving query params
 	useEffect(() => {
-		const handleKeyDown = (e: KeyboardEvent) => {
-			if (e.key === "Escape" && selectedEvent) {
-				setSelectedEvent(null)
-			}
+		if (window.location.pathname === "/") {
+			const params = window.location.search
+			window.history.replaceState({}, "", `/v1${params}`)
 		}
-
-		window.addEventListener("keydown", handleKeyDown)
-		return () => window.removeEventListener("keydown", handleKeyDown)
-	}, [selectedEvent])
+	}, [])
 
 	const handleDirectoryChange = (dir: string) => {
 		setSelectedDirectory(dir)
@@ -109,8 +121,19 @@ export function App() {
 				onSessionDeleted={handleSessionDeleted}
 			/>
 
+			{/* Design switcher bar */}
+			<div className="max-w-[1800px] mx-auto px-6 pt-4 flex items-center justify-between">
+				<DesignSwitcher />
+				<div className="text-xs text-gray-500">
+					{design === "v1" && "Waterfall"}
+					{design === "v2" && "Conversation"}
+					{design === "v3" && "Trace"}
+					{design === "v4" && "Columns"}
+				</div>
+			</div>
+
 			{/* Main content */}
-			<div className="max-w-[1800px] mx-auto px-6 py-6">
+			<div className="max-w-[1800px] mx-auto px-6 py-4">
 				{error && (
 					<div className="mb-6 p-4 bg-red-900/20 border border-red-900 rounded-lg text-red-400">{error}</div>
 				)}
@@ -128,22 +151,78 @@ export function App() {
 				)}
 
 				{sessionData && (
-					<GraphTimeline
-						sessionData={sessionData}
-						onSelectEvent={setSelectedEvent}
+					<DesignView
+						design={design}
+						allAgents={allAgents}
+						filteredEvents={filteredEvents}
+						filters={filters}
+						onFilterChange={setFilters}
 						selectedEvent={selectedEvent}
+						onSelectEvent={setSelectedEvent}
 					/>
 				)}
 			</div>
-
-			{/* Side panel for event details */}
-			{selectedEvent && sessionData && (
-				<EventDetailsPanel
-					event={selectedEvent}
-					agents={[sessionData.mainAgent, ...sessionData.mainAgent.children]}
-					onClose={() => setSelectedEvent(null)}
-				/>
-			)}
 		</div>
 	)
+}
+
+function DesignView({
+	design,
+	allAgents,
+	filteredEvents,
+	filters,
+	onFilterChange,
+	selectedEvent,
+	onSelectEvent,
+}: {
+	design: string
+	allAgents: ReturnType<typeof collectAllAgents>
+	filteredEvents: Event[]
+	filters: FilterState
+	onFilterChange: (f: FilterState) => void
+	selectedEvent: Event | null
+	onSelectEvent: (e: Event | null) => void
+}) {
+	switch (design) {
+		case "v2":
+			return (
+				<ConversationView
+					agents={allAgents}
+					events={filteredEvents}
+					filters={filters}
+					onFilterChange={onFilterChange}
+				/>
+			)
+		case "v3":
+			return (
+				<TraceView
+					agents={allAgents}
+					events={filteredEvents}
+					filters={filters}
+					onFilterChange={onFilterChange}
+					selectedEvent={selectedEvent}
+					onSelectEvent={onSelectEvent}
+				/>
+			)
+		case "v4":
+			return (
+				<ColumnsView
+					agents={allAgents}
+					events={filteredEvents}
+					filters={filters}
+					onFilterChange={onFilterChange}
+					selectedEvent={selectedEvent}
+					onSelectEvent={onSelectEvent}
+				/>
+			)
+		default:
+			return (
+				<WaterfallView
+					agents={allAgents}
+					events={filteredEvents}
+					filters={filters}
+					onFilterChange={onFilterChange}
+				/>
+			)
+	}
 }
