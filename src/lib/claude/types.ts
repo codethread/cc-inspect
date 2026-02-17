@@ -241,7 +241,7 @@ export type AgentNode = {
 	resumedFrom?: string // Tool use ID that resumed this agent
 }
 
-export const AgentNodeSchema = z.lazy(() =>
+export const AgentNodeSchema: z.ZodType<AgentNode> = z.lazy(() =>
 	z.object({
 		id: z.string(),
 		name: z.string().nullable(),

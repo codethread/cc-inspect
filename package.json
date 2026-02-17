@@ -7,8 +7,10 @@
     "cc-inspect": "./bin/cc-inspect"
   },
   "scripts": {
-    "dev": "bun --hot src/server/index.tsx",
+    "dev": "bun run routes:generate && bun --hot src/server/index.tsx",
     "start": "bun src/server/index.tsx",
+    "routes:generate": "bun tsr generate",
+    "routes:watch": "bun tsr watch",
     "build": "bun run build.ts",
     "typecheck": "tsc --noEmit",
     "fmt": "biome format --write .",
@@ -23,6 +25,7 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.21",
+    "@tanstack/react-router": "^1.160.2",
     "bun-plugin-tailwind": "^0.0.15",
     "markdown-to-jsx": "^8.0.0",
     "react": "^19",
@@ -32,6 +35,7 @@
     "zustand": "^5.0.11"
   },
   "devDependencies": {
+    "@tanstack/router-cli": "^1.160.1",
     "typescript": "^5.0.0",
     "@biomejs/biome": "^2.2.4",
     "@total-typescript/ts-reset": "^0.6.1",

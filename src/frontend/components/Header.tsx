@@ -1,7 +1,8 @@
-import {useEffect, useState} from "react"
+import {useNavigate} from "@tanstack/react-router"
+import {useCallback, useEffect, useState} from "react"
 import type {SessionData} from "#types"
 import {useDeleteSession, useDirectories, useSessions} from "../api"
-import {useAppStore} from "../store"
+import {Route} from "../routes/index"
 
 interface HeaderProps {
 	sessionData: SessionData | null
@@ -9,16 +10,28 @@ interface HeaderProps {
 
 export function Header({sessionData}: HeaderProps) {
 	const [copySuccess, setCopySuccess] = useState(false)
-	const selectedDirectory = useAppStore((s) => s.selectedDirectory)
-	const selectedSession = useAppStore((s) => s.selectedSession)
-	const selectDirectory = useAppStore((s) => s.selectDirectory)
-	const selectSession = useAppStore((s) => s.selectSession)
+	const {directory: selectedDirectory = "", session: selectedSession = ""} = Route.useSearch()
+	const navigate = useNavigate({from: "/"})
 
 	const {data: directories = [], error: dirError} = useDirectories()
 	const {data: sessions = [], isLoading: loadingSessions} = useSessions(selectedDirectory)
 	const deleteSession = useDeleteSession()
 
 	const loadingDirectories = directories.length === 0 && !dirError
+
+	const selectDirectory = useCallback(
+		(dir: string) => {
+			navigate({search: {directory: dir || undefined, session: undefined}})
+		},
+		[navigate],
+	)
+
+	const selectSession = useCallback(
+		(path: string) => {
+			navigate({search: (prev) => ({...prev, session: path || undefined})})
+		},
+		[navigate],
+	)
 
 	// Clear selectedDirectory if it's not in the loaded list
 	useEffect(() => {
