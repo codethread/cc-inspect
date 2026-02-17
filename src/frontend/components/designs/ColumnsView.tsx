@@ -1,4 +1,4 @@
-import {useCallback, useEffect, useMemo, useState} from "react"
+import {useCallback, useEffect, useState} from "react"
 import type {AgentNode, Event, EventType} from "#types"
 import {MarkdownContent} from "../MarkdownContent"
 import {
@@ -13,6 +13,7 @@ import {
 interface ColumnsViewProps {
 	agents: AgentNode[]
 	events: Event[]
+	baseFilteredEvents: Event[]
 	filters: FilterState
 	onFilterChange: (f: FilterState) => void
 	selectedEvent: Event | null
@@ -22,21 +23,22 @@ interface ColumnsViewProps {
 export function ColumnsView({
 	agents,
 	events,
+	baseFilteredEvents,
 	filters,
 	onFilterChange,
 	selectedEvent,
 	onSelectEvent,
 }: ColumnsViewProps) {
-	const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null)
 	const [rightPanelOpen, setRightPanelOpen] = useState(false)
 	const [leftWidth, setLeftWidth] = useState(250)
 	const [rightWidth, setRightWidth] = useState(500)
 
-	// Filter events by selected agent
-	const displayedEvents = useMemo(() => {
-		if (!selectedAgentId) return events
-		return events.filter((e) => e.agentId === selectedAgentId)
-	}, [events, selectedAgentId])
+	const selectedAgentId = filters.agents.size === 1 ? ([...filters.agents][0] ?? null) : null
+
+	const selectAgent = (agentId: string | null) => {
+		const nextAgents = agentId ? new Set([agentId]) : new Set<string>()
+		onFilterChange({...filters, agents: nextAgents})
+	}
 
 	const handleSelectEvent = useCallback(
 		(event: Event | null) => {
@@ -73,6 +75,15 @@ export function ColumnsView({
 		onFilterChange({...filters, searchText})
 	}
 
+	const hasActiveTypeFilter = filters.eventTypes.size > 0
+
+	// Count events per agent from type/search filtered events (before agent filtering)
+	const agentEventCounts = new Map<string, number>()
+	for (const event of baseFilteredEvents) {
+		const id = event.agentId ?? ""
+		agentEventCounts.set(id, (agentEventCounts.get(id) ?? 0) + 1)
+	}
+
 	return (
 		<div className="flex gap-0 h-[calc(100vh-200px)] bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
 			{/* Left panel: agent tree + filters */}
@@ -98,24 +109,24 @@ export function ColumnsView({
 					{/* All agents option */}
 					<button
 						type="button"
-						onClick={() => setSelectedAgentId(null)}
+						onClick={() => selectAgent(null)}
 						className={`w-full text-left px-2 py-1.5 rounded text-sm transition-colors mb-1 ${
-							selectedAgentId === null ? "bg-blue-900/50 text-blue-200" : "text-gray-400 hover:bg-gray-800"
+							filters.agents.size === 0 ? "bg-blue-900/50 text-blue-200" : "text-gray-400 hover:bg-gray-800"
 						}`}
 					>
 						All agents
-						<span className="text-xs text-gray-500 ml-1">({events.length})</span>
+						<span className="text-xs text-gray-500 ml-1">({baseFilteredEvents.length})</span>
 					</button>
 
 					{agents.map((agent) => {
 						const color = getAgentColor(agents, agent.id)
-						const eventCount = events.filter((e) => e.agentId === agent.id).length
+						const eventCount = agentEventCounts.get(agent.id) ?? 0
 						const isSelected = selectedAgentId === agent.id
 						return (
 							<button
 								key={agent.id}
 								type="button"
-								onClick={() => setSelectedAgentId(agent.id)}
+								onClick={() => selectAgent(agent.id)}
 								className={`w-full text-left px-2 py-1.5 rounded text-sm transition-colors flex items-center gap-2 ${
 									isSelected ? "bg-blue-900/50 text-blue-200" : "text-gray-400 hover:bg-gray-800"
 								}`}
@@ -130,14 +141,18 @@ export function ColumnsView({
 					{/* Event type filters */}
 					<div className="text-xs text-gray-500 font-medium px-2 mt-4 mb-2">Event Types</div>
 					{ALL_EVENT_TYPES.map((type) => {
-						const isActive = filters.eventTypes.has(type)
+						const isIncluded = filters.eventTypes.has(type)
 						return (
 							<button
 								key={type}
 								type="button"
 								onClick={() => toggleEventType(type)}
 								className={`w-full text-left px-2 py-1 rounded text-xs transition-opacity mb-0.5 ${getEventTypeBadgeClass(type)} ${
-									isActive ? "opacity-100" : "opacity-40 hover:opacity-70"
+									hasActiveTypeFilter
+										? isIncluded
+											? "opacity-100"
+											: "opacity-20"
+										: "opacity-60 hover:opacity-90"
 								}`}
 							>
 								{type}
@@ -147,19 +162,16 @@ export function ColumnsView({
 				</div>
 
 				{/* Resize handle */}
-				<DragHandle
-					direction="horizontal"
-					onDrag={(delta) => setLeftWidth((w) => Math.max(180, Math.min(400, w + delta)))}
-				/>
+				<DragHandle onDrag={(delta) => setLeftWidth((w) => Math.max(180, Math.min(400, w + delta)))} />
 			</div>
 
 			{/* Center panel: event stream */}
 			<div className="flex-1 overflow-y-auto min-w-0">
-				{displayedEvents.length === 0 ? (
+				{events.length === 0 ? (
 					<div className="text-center py-12 text-gray-500">No events</div>
 				) : (
 					<div>
-						{displayedEvents.map((event) => {
+						{events.map((event) => {
 							const isSelected = selectedEvent?.id === event.id
 							const color = getAgentColor(agents, event.agentId)
 							const agent = agents.find((a) => a.id === event.agentId)
@@ -206,10 +218,7 @@ export function ColumnsView({
 			{rightPanelOpen && selectedEvent && (
 				<>
 					{/* Resize handle */}
-					<DragHandle
-						direction="horizontal"
-						onDrag={(delta) => setRightWidth((w) => Math.max(300, Math.min(800, w - delta)))}
-					/>
+					<DragHandle onDrag={(delta) => setRightWidth((w) => Math.max(300, Math.min(800, w - delta)))} />
 
 					<div className="flex-shrink-0 border-l border-gray-800 overflow-y-auto" style={{width: rightWidth}}>
 						<div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 sticky top-0 bg-gray-900 z-10">
@@ -259,7 +268,7 @@ export function ColumnsView({
 	)
 }
 
-function DragHandle({onDrag}: {direction: "horizontal"; onDrag: (delta: number) => void}) {
+function DragHandle({onDrag}: {onDrag: (delta: number) => void}) {
 	const handleMouseDown = useCallback(
 		(e: React.MouseEvent) => {
 			e.preventDefault()

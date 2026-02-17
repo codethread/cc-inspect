@@ -105,24 +105,32 @@ export function createEmptyFilters(): FilterState {
 	}
 }
 
+function matchesTextAndTypeFilters(event: Event, filters: FilterState): boolean {
+	if (filters.eventTypes.size > 0 && !filters.eventTypes.has(event.type)) {
+		return false
+	}
+	if (filters.searchText) {
+		const text = filters.searchText.toLowerCase()
+		const summary = getEventSummary(event).toLowerCase()
+		const agentName = (event.agentName || "").toLowerCase()
+		if (!summary.includes(text) && !agentName.includes(text) && !event.type.includes(text)) {
+			return false
+		}
+	}
+	return true
+}
+
 export function filterEvents(events: Event[], filters: FilterState): Event[] {
 	return events.filter((event) => {
-		if (filters.agents.size > 0 && event.agentId && !filters.agents.has(event.agentId)) {
+		if (filters.agents.size > 0 && !filters.agents.has(event.agentId ?? "")) {
 			return false
 		}
-		if (filters.eventTypes.size > 0 && !filters.eventTypes.has(event.type)) {
-			return false
-		}
-		if (filters.searchText) {
-			const text = filters.searchText.toLowerCase()
-			const summary = getEventSummary(event).toLowerCase()
-			const agentName = (event.agentName || "").toLowerCase()
-			if (!summary.includes(text) && !agentName.includes(text) && !event.type.includes(text)) {
-				return false
-			}
-		}
-		return true
+		return matchesTextAndTypeFilters(event, filters)
 	})
+}
+
+export function filterEventsWithoutAgents(events: Event[], filters: FilterState): Event[] {
+	return events.filter((event) => matchesTextAndTypeFilters(event, filters))
 }
 
 export function collectAllAgents(mainAgent: AgentNode): AgentNode[] {

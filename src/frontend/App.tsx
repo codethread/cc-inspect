@@ -8,7 +8,13 @@ import {ConversationView} from "./components/designs/ConversationView"
 import {TraceView} from "./components/designs/TraceView"
 import {WaterfallView} from "./components/designs/WaterfallView"
 import {Header} from "./components/Header"
-import {collectAllAgents, createEmptyFilters, type FilterState, filterEvents} from "./components/shared"
+import {
+	collectAllAgents,
+	createEmptyFilters,
+	type FilterState,
+	filterEvents,
+	filterEventsWithoutAgents,
+} from "./components/shared"
 
 function getUrlParams() {
 	const params = new URLSearchParams(window.location.search)
@@ -60,6 +66,10 @@ export function App() {
 	const error = dirError?.message ?? sessionsError?.message ?? sessionError?.message ?? null
 
 	const allAgents = useMemo(() => (sessionData ? collectAllAgents(sessionData.mainAgent) : []), [sessionData])
+	const baseFilteredEvents = useMemo(
+		() => (sessionData ? filterEventsWithoutAgents(sessionData.allEvents, filters) : []),
+		[sessionData, filters],
+	)
 	const filteredEvents = useMemo(
 		() => (sessionData ? filterEvents(sessionData.allEvents, filters) : []),
 		[sessionData, filters],
@@ -155,6 +165,7 @@ export function App() {
 						design={design}
 						allAgents={allAgents}
 						filteredEvents={filteredEvents}
+						baseFilteredEvents={baseFilteredEvents}
 						filters={filters}
 						onFilterChange={setFilters}
 						selectedEvent={selectedEvent}
@@ -170,6 +181,7 @@ function DesignView({
 	design,
 	allAgents,
 	filteredEvents,
+	baseFilteredEvents,
 	filters,
 	onFilterChange,
 	selectedEvent,
@@ -178,6 +190,7 @@ function DesignView({
 	design: string
 	allAgents: ReturnType<typeof collectAllAgents>
 	filteredEvents: Event[]
+	baseFilteredEvents: Event[]
 	filters: FilterState
 	onFilterChange: (f: FilterState) => void
 	selectedEvent: Event | null
@@ -209,6 +222,7 @@ function DesignView({
 				<ColumnsView
 					agents={allAgents}
 					events={filteredEvents}
+					baseFilteredEvents={baseFilteredEvents}
 					filters={filters}
 					onFilterChange={onFilterChange}
 					selectedEvent={selectedEvent}

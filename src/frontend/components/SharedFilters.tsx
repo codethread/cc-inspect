@@ -37,7 +37,9 @@ export function SharedFilters({agents, filters, onFilterChange, className = ""}:
 		onFilterChange({agents: new Set(), eventTypes: new Set(), searchText: ""})
 	}
 
-	const hasFilters = filters.agents.size > 0 || filters.eventTypes.size > 0 || filters.searchText.length > 0
+	const hasActiveAgentFilter = filters.agents.size > 0
+	const hasActiveTypeFilter = filters.eventTypes.size > 0
+	const hasFilters = hasActiveAgentFilter || hasActiveTypeFilter || filters.searchText.length > 0
 
 	return (
 		<div className={`flex flex-wrap items-center gap-3 ${className}`}>
@@ -53,7 +55,7 @@ export function SharedFilters({agents, filters, onFilterChange, className = ""}:
 			{/* Agent chips */}
 			<div className="flex flex-wrap items-center gap-1">
 				{agents.map((agent) => {
-					const isActive = filters.agents.has(agent.id)
+					const isIncluded = filters.agents.has(agent.id)
 					const color = getAgentColor(agents, agent.id)
 					return (
 						<button
@@ -61,7 +63,11 @@ export function SharedFilters({agents, filters, onFilterChange, className = ""}:
 							type="button"
 							onClick={() => toggleAgent(agent.id)}
 							className={`px-2 py-0.5 rounded-full text-xs font-medium transition-colors border ${
-								isActive ? "border-current opacity-100" : "border-gray-600 opacity-50 hover:opacity-80"
+								hasActiveAgentFilter
+									? isIncluded
+										? "border-current"
+										: "border-gray-700 opacity-30"
+									: "border-gray-600 opacity-80 hover:opacity-100"
 							}`}
 							style={{color}}
 						>
@@ -74,14 +80,18 @@ export function SharedFilters({agents, filters, onFilterChange, className = ""}:
 			{/* Event type toggles */}
 			<div className="flex flex-wrap items-center gap-1">
 				{ALL_EVENT_TYPES.map((type) => {
-					const isActive = filters.eventTypes.has(type)
+					const isIncluded = filters.eventTypes.has(type)
 					return (
 						<button
 							key={type}
 							type="button"
 							onClick={() => toggleEventType(type)}
 							className={`px-2 py-0.5 rounded text-xs transition-opacity ${getEventTypeBadgeClass(type)} ${
-								isActive ? "opacity-100 ring-1 ring-white/30" : "opacity-40 hover:opacity-70"
+								hasActiveTypeFilter
+									? isIncluded
+										? "opacity-100 ring-1 ring-white/30"
+										: "opacity-20"
+									: "opacity-70 hover:opacity-100"
 							}`}
 						>
 							{type}
