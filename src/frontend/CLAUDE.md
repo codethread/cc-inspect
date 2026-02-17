@@ -37,7 +37,7 @@ React app for visualizing Claude Code session logs. Renders an interactive timel
 
 Uses `@tanstack/react-router` with file-based routing via `@tanstack/router-cli`.
 
-The router is configured in `frontend.tsx`. Route files live in `routes/`. The generated route tree (`routeTree.gen.ts`) is committed and regenerated via `bun run routes:generate`.
+The router is configured in `frontend.tsx`. Route files live in `routes/`. The generated route tree (`routeTree.gen.ts`) is auto-regenerated via a Claude Code hook — any Write or Edit to a file inside `routes/` triggers `tsr generate` automatically. No manual step needed when adding or modifying routes.
 
 ### Search params
 
