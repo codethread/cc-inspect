@@ -1,6 +1,8 @@
 import {useMutation, useQuery, useQueryClient} from "@tanstack/react-query"
 import type {
+	AgentNode,
 	DirectoriesResponse,
+	Event,
 	SessionData,
 	SessionDataResponse,
 	SessionHandle,
@@ -15,6 +17,31 @@ async function fetchApi<T extends {status: string}>(url: string): Promise<T> {
 		throw new Error(record.error ?? "Unknown error")
 	}
 	return data
+}
+
+// JSON serialization converts Date objects to ISO strings.
+// Rehydrate them at the data boundary so all consumers get real Date instances.
+function rehydrateEvent(event: Event): Event {
+	return {
+		...event,
+		timestamp: new Date(event.timestamp),
+	}
+}
+
+function rehydrateAgent(agent: AgentNode): AgentNode {
+	return {
+		...agent,
+		events: agent.events.map(rehydrateEvent),
+		children: agent.children.map(rehydrateAgent),
+	}
+}
+
+function rehydrateSessionData(data: SessionData): SessionData {
+	return {
+		...data,
+		mainAgent: rehydrateAgent(data.mainAgent),
+		allEvents: data.allEvents.map(rehydrateEvent),
+	}
 }
 
 export function useDirectories() {
@@ -47,7 +74,7 @@ export function useSessionData(sessionPath: string) {
 		queryKey: ["session", sessionPath],
 		queryFn: async () => {
 			const data = await fetchApi<SessionDataResponse>(`/api/session?path=${encodeURIComponent(sessionPath)}`)
-			if (data.status === "success") return data.data
+			if (data.status === "success") return rehydrateSessionData(data.data)
 			throw new Error("Unexpected response")
 		},
 		enabled: !!sessionPath,
@@ -61,7 +88,7 @@ export function useCliSession() {
 			try {
 				const res = await fetch("/api/session")
 				const data: SessionDataResponse = await res.json()
-				if (data.status === "success") return data.data
+				if (data.status === "success") return rehydrateSessionData(data.data)
 				return null
 			} catch {
 				return null
