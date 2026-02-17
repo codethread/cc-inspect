@@ -8,6 +8,8 @@ import {ConversationView} from "./components/designs/ConversationView"
 import {TraceView} from "./components/designs/TraceView"
 import {FocusView} from "./components/designs/FocusView"
 import {MatrixView} from "./components/designs/MatrixView"
+import {V7App} from "./components/designs/V7App"
+import {V8App} from "./components/designs/V8App"
 import {WaterfallView} from "./components/designs/WaterfallView"
 import {Header} from "./components/Header"
 import {
@@ -42,6 +44,8 @@ function getCurrentDesign(): string {
 	if (path === "/v4") return "v4"
 	if (path === "/v5") return "v5"
 	if (path === "/v6") return "v6"
+	if (path === "/v7") return "v7"
+	if (path === "/v8") return "v8"
 	return "v1"
 }
 
@@ -119,6 +123,10 @@ export function App() {
 	const handleSessionDeleted = () => {
 		setSelectedSession("")
 	}
+
+	// V7 and V8 are self-contained apps that manage their own session selection
+	if (design === "v7") return <V7App />
+	if (design === "v8") return <V8App />
 
 	return (
 		<div className="min-h-screen bg-gray-950 text-gray-100">
