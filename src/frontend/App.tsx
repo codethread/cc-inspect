@@ -4,15 +4,8 @@ import type {Event} from "#types"
 import {useCliSession, useDirectories, useSessionData, useSessions} from "./api"
 import {DesignSwitcher} from "./components/DesignSwitcher"
 import {ColumnsView} from "./components/designs/ColumnsView"
-import {ConversationView} from "./components/designs/ConversationView"
-import {FocusView} from "./components/designs/FocusView"
 import {MatrixView} from "./components/designs/MatrixView"
-import {TraceView} from "./components/designs/TraceView"
-import {V7App} from "./components/designs/V7App"
-import {V8App} from "./components/designs/V8App"
-import {V9App} from "./components/designs/V9App"
 import {V10App} from "./components/designs/V10App"
-import {WaterfallView} from "./components/designs/WaterfallView"
 import {Header} from "./components/Header"
 import {
 	collectAllAgents,
@@ -41,16 +34,10 @@ function updateUrlParams(directory: string, sessionPath: string) {
 
 function getCurrentDesign(): string {
 	const path = window.location.pathname
-	if (path === "/v2") return "v2"
-	if (path === "/v3") return "v3"
-	if (path === "/v4") return "v4"
-	if (path === "/v5") return "v5"
-	if (path === "/v6") return "v6"
-	if (path === "/v7") return "v7"
-	if (path === "/v8") return "v8"
-	if (path === "/v9") return "v9"
-	if (path === "/v10") return "v10"
-	return "v1"
+	if (path === "/columns") return "columns"
+	if (path === "/matrix") return "matrix"
+	if (path === "/reader") return "reader"
+	return "columns"
 }
 
 export function App() {
@@ -107,11 +94,10 @@ export function App() {
 		updateUrlParams(selectedDirectory, selectedSession)
 	}, [selectedDirectory, selectedSession])
 
-	// Redirect bare "/" to "/v1" preserving query params
 	useEffect(() => {
 		if (window.location.pathname === "/") {
 			const params = window.location.search
-			window.history.replaceState({}, "", `/v1${params}`)
+			window.history.replaceState({}, "", `/columns${params}`)
 		}
 	}, [])
 
@@ -128,11 +114,8 @@ export function App() {
 		setSelectedSession("")
 	}
 
-	// V7+ are self-contained apps that manage their own session selection
-	if (design === "v7") return <V7App />
-	if (design === "v8") return <V8App />
-	if (design === "v9") return <V9App />
-	if (design === "v10") return <V10App />
+	// Reader is self-contained — manages its own session selection
+	if (design === "reader") return <V10App />
 
 	return (
 		<div className="min-h-screen bg-gray-950 text-gray-100">
@@ -149,20 +132,14 @@ export function App() {
 				onSessionDeleted={handleSessionDeleted}
 			/>
 
-			{/* Design switcher bar */}
 			<div className="max-w-[1800px] mx-auto px-6 pt-4 flex items-center justify-between">
 				<DesignSwitcher />
 				<div className="text-xs text-gray-500">
-					{design === "v1" && "Waterfall"}
-					{design === "v2" && "Conversation"}
-					{design === "v3" && "Trace"}
-					{design === "v4" && "Columns"}
-					{design === "v5" && "Matrix"}
-					{design === "v6" && "Focus"}
+					{design === "columns" && "Columns"}
+					{design === "matrix" && "Matrix"}
 				</div>
 			</div>
 
-			{/* Main content */}
 			<div className="max-w-[1800px] mx-auto px-6 py-4">
 				{error && (
 					<div className="mb-6 p-4 bg-red-900/20 border border-red-900 rounded-lg text-red-400">{error}</div>
@@ -180,11 +157,19 @@ export function App() {
 					</div>
 				)}
 
-				{sessionData && (
-					<DesignView
-						design={design}
-						allAgents={allAgents}
-						filteredEvents={filteredEvents}
+				{sessionData && design === "matrix" && (
+					<MatrixView
+						agents={allAgents}
+						events={filteredEvents}
+						filters={filters}
+						onFilterChange={setFilters}
+					/>
+				)}
+
+				{sessionData && design === "columns" && (
+					<ColumnsView
+						agents={allAgents}
+						events={filteredEvents}
 						baseFilteredEvents={baseFilteredEvents}
 						filters={filters}
 						onFilterChange={setFilters}
@@ -195,86 +180,4 @@ export function App() {
 			</div>
 		</div>
 	)
-}
-
-function DesignView({
-	design,
-	allAgents,
-	filteredEvents,
-	baseFilteredEvents,
-	filters,
-	onFilterChange,
-	selectedEvent,
-	onSelectEvent,
-}: {
-	design: string
-	allAgents: ReturnType<typeof collectAllAgents>
-	filteredEvents: Event[]
-	baseFilteredEvents: Event[]
-	filters: FilterState
-	onFilterChange: (f: FilterState) => void
-	selectedEvent: Event | null
-	onSelectEvent: (e: Event | null) => void
-}) {
-	switch (design) {
-		case "v2":
-			return (
-				<ConversationView
-					agents={allAgents}
-					events={filteredEvents}
-					filters={filters}
-					onFilterChange={onFilterChange}
-				/>
-			)
-		case "v3":
-			return (
-				<TraceView
-					agents={allAgents}
-					events={filteredEvents}
-					filters={filters}
-					onFilterChange={onFilterChange}
-					selectedEvent={selectedEvent}
-					onSelectEvent={onSelectEvent}
-				/>
-			)
-		case "v4":
-			return (
-				<ColumnsView
-					agents={allAgents}
-					events={filteredEvents}
-					baseFilteredEvents={baseFilteredEvents}
-					filters={filters}
-					onFilterChange={onFilterChange}
-					selectedEvent={selectedEvent}
-					onSelectEvent={onSelectEvent}
-				/>
-			)
-		case "v5":
-			return (
-				<MatrixView
-					agents={allAgents}
-					events={filteredEvents}
-					filters={filters}
-					onFilterChange={onFilterChange}
-				/>
-			)
-		case "v6":
-			return (
-				<FocusView
-					agents={allAgents}
-					events={filteredEvents}
-					filters={filters}
-					onFilterChange={onFilterChange}
-				/>
-			)
-		default:
-			return (
-				<WaterfallView
-					agents={allAgents}
-					events={filteredEvents}
-					filters={filters}
-					onFilterChange={onFilterChange}
-				/>
-			)
-	}
 }

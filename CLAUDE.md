@@ -81,15 +81,17 @@ Re-exports all SDK types via `export * from "./lib/claude"` so the `#types` impo
 
 ### Frontend (src/frontend/App.tsx, src/frontend/frontend.tsx)
 
-React app with three main features:
+React app with three UI designs, selectable by URL path:
 
-1. **Directory/Session selector** - Dropdown UI in header to browse and load sessions, with URL persistence (`?directory=<dir>&session=<path>`)
+- `/columns` — Three-panel explorer with per-agent drill-down (default)
+- `/matrix` — Agent-column density grid with collapsible sub-agents
+- `/reader` — Structured document reader with turn grouping (self-contained)
 
-2. **GraphTimeline** - Main visualization component showing events chronologically with agent context
+The Columns and Matrix designs share the `Header` component for session selection and `SharedFilters`/`shared.tsx` utilities for filtering. The Reader design is fully self-contained — it manages its own session selection and filtering.
 
-3. **EventDetailsPanel** - Side panel displaying full event data when selected
+The app uses TanStack Query (`@tanstack/react-query`) for data fetching, with query/mutation hooks defined in `src/frontend/api.ts`. The `QueryClientProvider` is set up in `frontend.tsx`. CLI-provided sessions are handled by a `useCliSession` hook that attempts to load `/api/session` without parameters. The API layer rehydrates `Date` objects from JSON responses.
 
-The app uses TanStack Query (`@tanstack/react-query`) for data fetching, with query/mutation hooks defined in `src/frontend/api.ts`. The `QueryClientProvider` is set up in `frontend.tsx`. CLI-provided sessions are handled by a `useCliSession` hook that attempts to load `/api/session` without parameters.
+Each design has a detailed behaviour doc: see `src/frontend/components/designs/*.md`.
 
 ## File Structure
 
@@ -99,10 +101,18 @@ The app uses TanStack Query (`@tanstack/react-query`) for data fetching, with qu
 - `src/server/index.tsx` - Bun server entry point (CLI binary via shebang)
 - `src/server/routes/` - Thin route handlers using Claude SDK
 - `src/server/utils.ts` - Server-level path validation and constants
-- `src/frontend/App.tsx` - Main React component with selectors and layout
-- `src/frontend/api.ts` - TanStack Query hooks and fetch helper
+- `src/frontend/App.tsx` - Route-based design switching, shared state for Columns/Matrix
+- `src/frontend/api.ts` - TanStack Query hooks, fetch helper, Date rehydration
 - `src/frontend/frontend.tsx` - React DOM mounting with QueryClientProvider
-- `src/frontend/components/` - React UI components (timeline, event list, details panel)
+- `src/frontend/components/Header.tsx` - Session selector (used by Columns/Matrix)
+- `src/frontend/components/DesignSwitcher.tsx` - Nav bar for switching between designs
+- `src/frontend/components/SharedFilters.tsx` - Reusable filter bar (agent chips, type toggles, search)
+- `src/frontend/components/shared.tsx` - Shared utilities (formatTime, filterEvents, collectAllAgents, colors)
+- `src/frontend/components/MarkdownContent.tsx` - Markdown renderer
+- `src/frontend/components/designs/ColumnsView.tsx` - Columns design (`/columns`)
+- `src/frontend/components/designs/MatrixView.tsx` - Matrix design (`/matrix`)
+- `src/frontend/components/designs/V10App.tsx` - Reader design (`/reader`)
+- `src/frontend/components/designs/*.md` - Design behaviour docs
 - `src/frontend/index.html` - HTML entry point that imports React app
 
 ## Code style

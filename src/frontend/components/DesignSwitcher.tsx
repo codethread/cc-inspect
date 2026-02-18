@@ -1,14 +1,7 @@
 const DESIGNS = [
-	{path: "/v1", label: "V1", title: "Waterfall"},
-	{path: "/v2", label: "V2", title: "Conversation"},
-	{path: "/v3", label: "V3", title: "Trace"},
-	{path: "/v4", label: "V4", title: "Columns"},
-	{path: "/v5", label: "V5", title: "Matrix"},
-	{path: "/v6", label: "V6", title: "Focus"},
-	{path: "/v7", label: "V7", title: "Chronicle"},
-	{path: "/v8", label: "V8", title: "Terminal"},
-	{path: "/v9", label: "V9", title: "Inspector"},
-	{path: "/v10", label: "V10", title: "Reader"},
+	{path: "/columns", label: "Columns", title: "Three-panel explorer with agent drill-down"},
+	{path: "/matrix", label: "Matrix", title: "Agent-column grid with collapsible sub-agents"},
+	{path: "/reader", label: "Reader", title: "Structured document reader with turn grouping"},
 ] as const
 
 export function DesignSwitcher() {

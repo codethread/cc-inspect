@@ -47,50 +47,6 @@ export function getEventSummary(event: Event): string {
 	}
 }
 
-export function renderEventContent(event: Event): React.ReactNode {
-	const {data} = event
-
-	switch (data.type) {
-		case "user-message":
-			return <div className="font-mono text-xs whitespace-pre-wrap">{data.text}</div>
-		case "assistant-message":
-			return <div className="whitespace-pre-wrap line-clamp-3">{data.text}</div>
-		case "thinking":
-			return (
-				<div className="text-gray-400 italic line-clamp-2">
-					<span className="text-purple-400">Thinking:</span> {data.content}
-				</div>
-			)
-		case "tool-use":
-			return (
-				<div>
-					<span className="text-blue-400 font-semibold">{data.toolName}</span>
-					{data.description && <span className="text-gray-500 ml-2">- {data.description}</span>}
-				</div>
-			)
-		case "tool-result":
-			return (
-				<div>
-					<span className={data.success ? "text-green-400" : "text-red-400"}>
-						{data.success ? "+" : "x"} Result
-					</span>
-					<span className="text-gray-500 ml-2">({data.output.length} chars)</span>
-					{data.agentId && <span className="text-blue-400 ml-2">from agent</span>}
-				</div>
-			)
-		case "agent-spawn":
-			return (
-				<div>
-					<span className="text-yellow-400">Spawned:</span> {data.agentId}
-				</div>
-			)
-		case "summary":
-			return <div className="text-gray-400">{data.summary}</div>
-		default:
-			return <div className="text-gray-500">Unknown event type</div>
-	}
-}
-
 export interface FilterState {
 	agents: Set<string>
 	eventTypes: Set<EventType>
