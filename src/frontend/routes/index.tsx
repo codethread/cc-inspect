@@ -33,6 +33,11 @@ function IndexRoute() {
 	const loading = session ? loadingSession : loadingCli
 	const error = sessionError?.message ?? null
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: session is intentional trigger; not read inside effect
+	useEffect(() => {
+		selectEvent(null)
+	}, [session, selectEvent])
+
 	useEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {
 			if (e.key === "Escape" && selectedEvent) {
