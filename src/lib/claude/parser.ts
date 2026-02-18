@@ -299,11 +299,11 @@ export function extractAgentInfo(logEntries: LogEntry[], agentId: string): Exten
 
 	if (!toolUseId) {
 		// Fallback to basic info from toolUseResult
-		const shortName = normalizedResult.prompt?.substring(0, 50) || null
+		const shortName = normalizedResult.prompt?.substring(0, 50) ?? null
 		return {
 			name: shortName,
 			model: undefined,
-			description: shortName,
+			description: shortName ?? undefined,
 		}
 	}
 
@@ -323,7 +323,7 @@ export function extractAgentInfo(logEntries: LogEntry[], agentId: string): Exten
 						name: shortDescription,
 						model: toolUse.input.model as string | undefined,
 						subagentType: toolUse.input.subagent_type as string | undefined,
-						description: shortDescription,
+						description: shortDescription ?? undefined,
 						isResumed: isResume && resumesAgentId === agentId,
 						resumedFrom: isResume && resumesAgentId === agentId ? toolUse.id : undefined,
 					}
@@ -333,11 +333,11 @@ export function extractAgentInfo(logEntries: LogEntry[], agentId: string): Exten
 	}
 
 	// Fallback if we can't find the tool_use
-	const shortName = normalizedResult.prompt?.substring(0, 50) || null
+	const shortName = normalizedResult.prompt?.substring(0, 50) ?? null
 	return {
 		name: shortName,
 		model: undefined,
-		description: shortName,
+		description: shortName ?? undefined,
 	}
 }
 

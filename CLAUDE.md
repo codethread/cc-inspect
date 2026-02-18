@@ -10,7 +10,8 @@ cc-inspect is a web-based visualizer for Claude Code session logs. It parses `.j
 
 ### Development
 
-- `bun dev` - Start development server with hot reload on port 5555
+- `bun dev` - Generate route tree then start development server with hot reload on port 5555
+- `bun run routes:generate` - Regenerate TanStack Router route tree (`src/frontend/routeTree.gen.ts`)
 - `bun start` - Run without hot reload
 - `cc-inspect` - Run the globally linked CLI (after `npm link`)
 - `cc-inspect -s <path>` - Load a specific session file
