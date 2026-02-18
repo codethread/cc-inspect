@@ -13,11 +13,13 @@ interface TraceViewProps {
 	onSelectEvent: (e: Event | null) => void
 }
 
-const BLOCK_WIDTH = 120
 const BLOCK_HEIGHT = 36
-const BLOCK_GAP = 4
 const LANE_HEIGHT = 52
 const LANE_LABEL_WIDTH = 140
+const MIN_BLOCK_WIDTH = 80
+const SPAN_BLOCK_WIDTH = 160
+const MIN_GAP = 6
+const TIMELINE_PADDING = 40
 
 const TYPE_COLORS: Record<string, string> = {
 	"user-message": "#164e63",
@@ -27,6 +29,117 @@ const TYPE_COLORS: Record<string, string> = {
 	"tool-result": "#14532d",
 	"agent-spawn": "#713f12",
 	summary: "#374151",
+}
+
+/** A visual block in the swimlane -- either a single event or a tool-use+tool-result span */
+interface SwimBlock {
+	id: string
+	type: "single" | "span"
+	toolUse: Event
+	toolResult: Event | null
+	/** Whether the tool result was an error */
+	failed: boolean
+	/** Timestamp used for positioning (earliest of the pair) */
+	timestamp: number
+	/** Computed X position (left edge) */
+	x: number
+	/** Computed width */
+	width: number
+}
+
+function buildSwimBlocks(laneEvents: Event[], allToolResultMap: Map<string, Event>): SwimBlock[] {
+	const blocks: SwimBlock[] = []
+	const consumedResultIds = new Set<string>()
+
+	for (const event of laneEvents) {
+		if (event.data.type === "tool-use") {
+			const toolId = event.data.toolId
+			const result = allToolResultMap.get(toolId)
+			if (result) {
+				consumedResultIds.add(result.id)
+				const failed = result.data.type === "tool-result" && !result.data.success
+				blocks.push({
+					id: event.id,
+					type: "span",
+					toolUse: event,
+					toolResult: result,
+					failed,
+					timestamp: event.timestamp.getTime(),
+					x: 0,
+					width: SPAN_BLOCK_WIDTH,
+				})
+			} else {
+				blocks.push({
+					id: event.id,
+					type: "single",
+					toolUse: event,
+					toolResult: null,
+					failed: false,
+					timestamp: event.timestamp.getTime(),
+					x: 0,
+					width: MIN_BLOCK_WIDTH,
+				})
+			}
+		} else if (event.data.type === "tool-result") {
+			// Skip if already consumed into a span
+			if (consumedResultIds.has(event.id)) continue
+			blocks.push({
+				id: event.id,
+				type: "single",
+				toolUse: event,
+				toolResult: null,
+				failed: event.data.type === "tool-result" && !event.data.success,
+				timestamp: event.timestamp.getTime(),
+				x: 0,
+				width: MIN_BLOCK_WIDTH,
+			})
+		} else {
+			blocks.push({
+				id: event.id,
+				type: "single",
+				toolUse: event,
+				toolResult: null,
+				failed: false,
+				timestamp: event.timestamp.getTime(),
+				x: 0,
+				width: MIN_BLOCK_WIDTH,
+			})
+		}
+	}
+
+	return blocks
+}
+
+interface TimeRange {
+	min: number
+	max: number
+	availableWidth: number
+}
+
+/** Compute time-proportional X positions for blocks, enforcing a minimum gap */
+function layoutBlocks(blocks: SwimBlock[], range: TimeRange): void {
+	if (blocks.length === 0) return
+	const span = range.max - range.min
+
+	for (const block of blocks) {
+		if (span === 0) {
+			block.x = LANE_LABEL_WIDTH
+		} else {
+			const ratio = (block.timestamp - range.min) / span
+			block.x = LANE_LABEL_WIDTH + ratio * range.availableWidth
+		}
+	}
+
+	// Enforce minimum gap so blocks don't overlap: sweep left-to-right and push right
+	for (let i = 1; i < blocks.length; i++) {
+		const prev = blocks[i - 1]
+		const curr = blocks[i]
+		if (!prev || !curr) continue
+		const minLeft = prev.x + prev.width + MIN_GAP
+		if (curr.x < minLeft) {
+			curr.x = minLeft
+		}
+	}
 }
 
 export function TraceView({
@@ -39,7 +152,31 @@ export function TraceView({
 }: TraceViewProps) {
 	const scrollRef = useRef<HTMLDivElement>(null)
 
-	// Build swimlane data: for each agent, place events in sequence order
+	// Build a map of toolId -> tool-result event for pairing
+	const toolResultMap = useMemo(() => {
+		const map = new Map<string, Event>()
+		for (const event of events) {
+			if (event.data.type === "tool-result") {
+				map.set(event.data.toolUseId, event)
+			}
+		}
+		return map
+	}, [events])
+
+	// Global time range across all events
+	const {minTime, maxTime} = useMemo(() => {
+		if (events.length === 0) return {minTime: 0, maxTime: 0}
+		let min = Number.POSITIVE_INFINITY
+		let max = Number.NEGATIVE_INFINITY
+		for (const e of events) {
+			const t = e.timestamp.getTime()
+			if (t < min) min = t
+			if (t > max) max = t
+		}
+		return {minTime: min, maxTime: max}
+	}, [events])
+
+	// Build swimlane data with time-positioned blocks
 	const swimlaneData = useMemo(() => {
 		const agentLanes = new Map<string, {agent: AgentNode; events: Event[]}>()
 
@@ -60,7 +197,35 @@ export function TraceView({
 		return Array.from(agentLanes.values()).filter((lane) => lane.events.length > 0)
 	}, [agents, events])
 
-	// Build spawn connections between lanes
+	// Build blocks and compute layout
+	const {laneBlocks, totalWidth} = useMemo(() => {
+		// Generous available width that scales with event density
+		const baseAvailableWidth = Math.max(800, events.length * 30)
+		const range: TimeRange = {min: minTime, max: maxTime, availableWidth: baseAvailableWidth}
+
+		const allLaneBlocks: {agent: AgentNode; blocks: SwimBlock[]}[] = []
+
+		for (const lane of swimlaneData) {
+			const blocks = buildSwimBlocks(lane.events, toolResultMap)
+			layoutBlocks(blocks, range)
+			allLaneBlocks.push({agent: lane.agent, blocks})
+		}
+
+		// Compute the overall width needed: rightmost edge of any block + padding
+		let maxRight = LANE_LABEL_WIDTH + baseAvailableWidth
+		for (const lane of allLaneBlocks) {
+			for (const block of lane.blocks) {
+				const right = block.x + block.width
+				if (right > maxRight) maxRight = right
+			}
+		}
+
+		return {laneBlocks: allLaneBlocks, totalWidth: maxRight + TIMELINE_PADDING}
+	}, [swimlaneData, toolResultMap, minTime, maxTime, events.length])
+
+	const totalHeight = laneBlocks.length * LANE_HEIGHT
+
+	// Build spawn connections between lanes using block positions
 	const connections = useMemo(() => {
 		const conns: {fromLane: number; fromX: number; toLane: number; toX: number; type: string}[] = []
 
@@ -68,41 +233,37 @@ export function TraceView({
 			if (event.data.type !== "tool-use" || event.data.toolName !== "Task") continue
 
 			const toolId = event.data.toolId
-			// Find the matching tool-result with agentId
 			const result = events.find(
 				(e) => e.data.type === "tool-result" && e.data.toolUseId === toolId && e.data.agentId,
 			)
 			if (!result || result.data.type !== "tool-result" || !result.data.agentId) continue
 
 			const spawnedAgentId = result.data.agentId
-			const parentLaneIdx = swimlaneData.findIndex((l) => l.agent.id === event.agentId)
-			const childLaneIdx = swimlaneData.findIndex((l) => l.agent.id === spawnedAgentId)
+			const parentLaneIdx = laneBlocks.findIndex((l) => l.agent.id === event.agentId)
+			const childLaneIdx = laneBlocks.findIndex((l) => l.agent.id === spawnedAgentId)
 			if (parentLaneIdx === -1 || childLaneIdx === -1) continue
 
-			const parentLane = swimlaneData[parentLaneIdx]
-			const childLane = swimlaneData[childLaneIdx]
+			const parentLane = laneBlocks[parentLaneIdx]
+			const childLane = laneBlocks[childLaneIdx]
 			if (!parentLane || !childLane) continue
 
-			const parentEventIdx = parentLane.events.findIndex((e) => e.id === event.id)
-			const childFirstIdx = 0
+			// Find the block containing this tool-use event
+			const parentBlock = parentLane.blocks.find((b) => b.toolUse.id === event.id)
+			const childFirstBlock = childLane.blocks[0]
 
-			if (parentEventIdx >= 0 && childLane.events.length > 0) {
+			if (parentBlock && childFirstBlock) {
 				conns.push({
 					fromLane: parentLaneIdx,
-					fromX: LANE_LABEL_WIDTH + parentEventIdx * (BLOCK_WIDTH + BLOCK_GAP) + BLOCK_WIDTH / 2,
+					fromX: parentBlock.x + parentBlock.width / 2,
 					toLane: childLaneIdx,
-					toX: LANE_LABEL_WIDTH + childFirstIdx * (BLOCK_WIDTH + BLOCK_GAP) + BLOCK_WIDTH / 2,
+					toX: childFirstBlock.x + childFirstBlock.width / 2,
 					type: "spawn",
 				})
 			}
 		}
 
 		return conns
-	}, [events, swimlaneData])
-
-	const maxEventsInLane = Math.max(1, ...swimlaneData.map((l) => l.events.length))
-	const totalWidth = LANE_LABEL_WIDTH + maxEventsInLane * (BLOCK_WIDTH + BLOCK_GAP) + 40
-	const totalHeight = swimlaneData.length * LANE_HEIGHT
+	}, [events, laneBlocks])
 
 	useEffect(() => {
 		const handler = (e: KeyboardEvent) => {
@@ -132,16 +293,18 @@ export function TraceView({
 						role="img"
 						aria-label="Event minimap overview"
 					>
-						{swimlaneData.map((lane, laneIdx) =>
-							lane.events.map((event, eventIdx) => (
+						{laneBlocks.map((lane, laneIdx) =>
+							lane.blocks.map((block) => (
 								<rect
-									key={event.id}
-									x={LANE_LABEL_WIDTH + eventIdx * (BLOCK_WIDTH + BLOCK_GAP)}
+									key={block.id}
+									x={block.x}
 									y={laneIdx * LANE_HEIGHT + 4}
-									width={BLOCK_WIDTH}
+									width={block.width}
 									height={LANE_HEIGHT - 8}
-									fill={TYPE_COLORS[event.type] || "#374151"}
+									fill={TYPE_COLORS[block.toolUse.type] || "#374151"}
 									rx={2}
+									stroke={block.failed ? "#ef4444" : "none"}
+									strokeWidth={block.failed ? 2 : 0}
 								/>
 							)),
 						)}
@@ -177,7 +340,7 @@ export function TraceView({
 					</svg>
 
 					{/* Lanes */}
-					{swimlaneData.map((lane, laneIdx) => {
+					{laneBlocks.map((lane, laneIdx) => {
 						const color = getAgentColor(agents, lane.agent.id)
 						return (
 							<div
@@ -201,34 +364,70 @@ export function TraceView({
 								</div>
 
 								{/* Event blocks */}
-								{lane.events.map((event, eventIdx) => {
-									const isSelected = selectedEvent?.id === event.id
-									const bgColor = TYPE_COLORS[event.type] || "#374151"
+								{lane.blocks.map((block) => {
+									const isSpan = block.type === "span"
+									const primaryEvent = block.toolUse
+									const isSelected =
+										selectedEvent?.id === primaryEvent.id ||
+										(block.toolResult && selectedEvent?.id === block.toolResult.id)
+									const bgColor = TYPE_COLORS[primaryEvent.type] || "#374151"
+
 									return (
 										<button
-											key={event.id}
+											key={block.id}
 											type="button"
-											onClick={() => onSelectEvent(isSelected ? null : event)}
+											onClick={() => onSelectEvent(isSelected ? null : primaryEvent)}
 											className={`absolute rounded text-xs px-2 py-1 truncate text-left transition-all ${
 												isSelected ? "ring-2 ring-blue-400 z-20" : "hover:brightness-125"
-											}`}
+											} ${block.failed ? "ring-1 ring-red-500/70" : ""}`}
 											style={{
-												left: LANE_LABEL_WIDTH + eventIdx * (BLOCK_WIDTH + BLOCK_GAP),
+												left: block.x,
 												top: (LANE_HEIGHT - BLOCK_HEIGHT) / 2,
-												width: BLOCK_WIDTH,
+												width: block.width,
 												height: BLOCK_HEIGHT,
 												backgroundColor: bgColor,
+												// Spans get a subtle gradient to show the two phases
+												...(isSpan
+													? {
+															background: `linear-gradient(90deg, ${bgColor} 55%, ${block.failed ? "#7f1d1d" : "#14532d"} 100%)`,
+															borderLeft: `2px solid ${bgColor}`,
+															borderRight: `2px solid ${block.failed ? "#ef4444" : "#22c55e"}`,
+														}
+													: {}),
 											}}
-											title={getEventSummary(event)}
+											title={
+												isSpan && block.toolResult
+													? `${getEventSummary(primaryEvent)} → ${getEventSummary(block.toolResult)}`
+													: getEventSummary(primaryEvent)
+											}
 										>
-											<div className="text-[10px] text-gray-400">{event.type}</div>
-											<div className="text-gray-200 truncate text-[11px]">{getShortLabel(event)}</div>
+											{isSpan ? (
+												<>
+													<div className="text-[10px] text-gray-400 flex items-center gap-1">
+														<span>tool-use</span>
+														<span className="text-gray-600">→</span>
+														<span className={block.failed ? "text-red-400" : "text-green-400"}>
+															{block.failed ? "err" : "ok"}
+														</span>
+													</div>
+													<div className="text-gray-200 truncate text-[11px]">
+														{getShortLabel(primaryEvent)}
+													</div>
+												</>
+											) : (
+												<>
+													<div className="text-[10px] text-gray-400">{primaryEvent.type}</div>
+													<div className="text-gray-200 truncate text-[11px]">
+														{getShortLabel(primaryEvent)}
+													</div>
+												</>
+											)}
 										</button>
 									)
 								})}
 
 								{/* Lane separator */}
-								{laneIdx < swimlaneData.length - 1 && (
+								{laneIdx < laneBlocks.length - 1 && (
 									<div className="absolute bottom-0 left-0 h-px bg-gray-800" style={{width: totalWidth}} />
 								)}
 							</div>

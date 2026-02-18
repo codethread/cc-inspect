@@ -1,4 +1,4 @@
-import {useCallback, useEffect, useState} from "react"
+import {useCallback, useEffect, useMemo, useState} from "react"
 import type {AgentNode, Event, EventType} from "#types"
 import {MarkdownContent} from "../MarkdownContent"
 import {
@@ -20,6 +20,163 @@ interface ColumnsViewProps {
 	onSelectEvent: (e: Event | null) => void
 }
 
+/**
+ * A display item in the center panel. Events are either shown individually,
+ * grouped as tool-use/tool-result pairs, or collapsed into sub-agent task cards.
+ */
+type DisplayItem =
+	| {kind: "message"; event: Event}
+	| {kind: "tool-pair"; toolUse: Event; toolResult: Event | null; failed: boolean}
+	| {
+			kind: "agent-task"
+			toolUse: Event
+			toolResult: Event | null
+			agentSpawn: Event | null
+			agent: AgentNode
+			failed: boolean
+	  }
+
+function buildDisplayItems(opts: {
+	agentEvents: Event[]
+	allEvents: Event[]
+	agents: AgentNode[]
+	viewedAgentId: string | null
+}): DisplayItem[] {
+	const {agentEvents, allEvents, agents, viewedAgentId} = opts
+	const items: DisplayItem[] = []
+
+	// Build lookup: toolUseId -> tool-result event (across all events for cross-agent results)
+	const toolResultByUseId = new Map<string, Event>()
+	for (const ev of allEvents) {
+		if (ev.data.type === "tool-result") {
+			toolResultByUseId.set(ev.data.toolUseId, ev)
+		}
+	}
+
+	// Build lookup: agentId -> AgentNode
+	const agentById = new Map<string, AgentNode>()
+	for (const a of agents) {
+		agentById.set(a.id, a)
+	}
+
+	// Build lookup: agentId -> agent-spawn event (on the parent agent)
+	const agentSpawnByAgentId = new Map<string, Event>()
+	for (const ev of allEvents) {
+		if (ev.data.type === "agent-spawn") {
+			agentSpawnByAgentId.set(ev.data.agentId, ev)
+		}
+	}
+
+	// Find child agent IDs of the viewed agent
+	const childAgentIds = new Set<string>()
+	const viewedAgent = agentById.get(viewedAgentId ?? "")
+	if (viewedAgent) {
+		for (const child of viewedAgent.children) {
+			childAgentIds.add(child.id)
+		}
+	}
+
+	// Track tool-use IDs that spawn sub-agents so we can identify them
+	// A tool-result with an agentId field means it delegated to that agent
+	const toolUseToAgent = new Map<string, string>()
+	for (const ev of allEvents) {
+		if (ev.data.type === "tool-result" && ev.data.agentId && childAgentIds.has(ev.data.agentId)) {
+			toolUseToAgent.set(ev.data.toolUseId, ev.data.agentId)
+		}
+	}
+
+	// Also check: tool-use events with toolName "Task" or matching agent-spawn agentIds
+	// via the agent-spawn events that reference child agents
+	for (const ev of agentEvents) {
+		if (ev.data.type === "tool-use") {
+			// Check if there's an agent-spawn for any child that references this tool
+			for (const child of viewedAgent?.children ?? []) {
+				const spawn = agentSpawnByAgentId.get(child.id)
+				if (spawn && !toolUseToAgent.has(ev.data.toolId)) {
+					// Match by proximity: if the agent-spawn timestamp is close to this tool-use
+					const timeDiff = Math.abs(spawn.timestamp.getTime() - ev.timestamp.getTime())
+					if (timeDiff < 5000) {
+						toolUseToAgent.set(ev.data.toolId, child.id)
+					}
+				}
+			}
+		}
+	}
+
+	const consumedEventIds = new Set<string>()
+	const eventList = [...agentEvents]
+
+	for (let i = 0; i < eventList.length; i++) {
+		const ev = eventList[i]
+		if (!ev || consumedEventIds.has(ev.id)) continue
+
+		if (ev.data.type === "tool-use") {
+			const toolId = ev.data.toolId
+			const result = toolResultByUseId.get(toolId) ?? null
+			const spawnsAgentId = toolUseToAgent.get(toolId)
+			const failed = result
+				? !result.data.type || (result.data.type === "tool-result" && !result.data.success)
+				: false
+
+			if (result) consumedEventIds.add(result.id)
+
+			if (spawnsAgentId) {
+				const agent = agentById.get(spawnsAgentId)
+				const spawn = agentSpawnByAgentId.get(spawnsAgentId) ?? null
+				if (agent) {
+					items.push({
+						kind: "agent-task",
+						toolUse: ev,
+						toolResult: result,
+						agentSpawn: spawn,
+						agent,
+						failed,
+					})
+					continue
+				}
+			}
+
+			items.push({kind: "tool-pair", toolUse: ev, toolResult: result, failed})
+			continue
+		}
+
+		if (ev.data.type === "tool-result") {
+			// Already consumed as part of a pair above, skip standalone
+			if (consumedEventIds.has(ev.id)) continue
+			// Orphaned tool-result — show as message
+			items.push({kind: "message", event: ev})
+			continue
+		}
+
+		// Agent-spawn events on the viewed agent are handled as part of agent-task cards
+		if (ev.data.type === "agent-spawn" && childAgentIds.has(ev.data.agentId)) {
+			consumedEventIds.add(ev.id)
+			continue
+		}
+
+		items.push({kind: "message", event: ev})
+	}
+
+	return items
+}
+
+function getAgentBreadcrumb(agents: AgentNode[], targetId: string | null): AgentNode[] {
+	if (!targetId) return []
+
+	const agentById = new Map<string, AgentNode>()
+	for (const a of agents) {
+		agentById.set(a.id, a)
+	}
+
+	const path: AgentNode[] = []
+	let current = agentById.get(targetId)
+	while (current) {
+		path.unshift(current)
+		current = current.parent ? agentById.get(current.parent) : undefined
+	}
+	return path
+}
+
 export function ColumnsView({
 	agents,
 	events,
@@ -32,13 +189,14 @@ export function ColumnsView({
 	const [rightPanelOpen, setRightPanelOpen] = useState(false)
 	const [leftWidth, setLeftWidth] = useState(250)
 	const [rightWidth, setRightWidth] = useState(500)
+	const [viewedAgentId, setViewedAgentId] = useState<string | null>(() => agents[0]?.id ?? null)
 
-	const selectedAgentId = filters.agents.size === 1 ? ([...filters.agents][0] ?? null) : null
-
-	const selectAgent = (agentId: string | null) => {
-		const nextAgents = agentId ? new Set([agentId]) : new Set<string>()
-		onFilterChange({...filters, agents: nextAgents})
-	}
+	// Reset viewed agent when agents change (new session loaded)
+	useEffect(() => {
+		if (agents.length > 0 && !agents.find((a) => a.id === viewedAgentId)) {
+			setViewedAgentId(agents[0]?.id ?? null)
+		}
+	}, [agents, viewedAgentId])
 
 	const handleSelectEvent = useCallback(
 		(event: Event | null) => {
@@ -77,12 +235,25 @@ export function ColumnsView({
 
 	const hasActiveTypeFilter = filters.eventTypes.size > 0
 
-	// Count events per agent from type/search filtered events (before agent filtering)
+	// Events for the currently viewed agent, applying type/search filters only
+	const viewedAgentEvents = useMemo(() => {
+		return baseFilteredEvents.filter((ev) => (ev.agentId ?? "") === (viewedAgentId ?? ""))
+	}, [baseFilteredEvents, viewedAgentId])
+
+	// Build display items for the center panel
+	const displayItems = useMemo(() => {
+		return buildDisplayItems({agentEvents: viewedAgentEvents, allEvents: events, agents, viewedAgentId})
+	}, [viewedAgentEvents, events, agents, viewedAgentId])
+
+	// Count events per agent from base filtered events
 	const agentEventCounts = new Map<string, number>()
 	for (const event of baseFilteredEvents) {
 		const id = event.agentId ?? ""
 		agentEventCounts.set(id, (agentEventCounts.get(id) ?? 0) + 1)
 	}
+
+	const breadcrumb = useMemo(() => getAgentBreadcrumb(agents, viewedAgentId), [agents, viewedAgentId])
+	const isMainAgent = viewedAgentId === agents[0]?.id
 
 	return (
 		<div className="flex gap-0 h-[calc(100vh-200px)] bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
@@ -106,30 +277,20 @@ export function ColumnsView({
 				<div className="flex-1 overflow-y-auto p-2">
 					<div className="text-xs text-gray-500 font-medium px-2 mb-2">Agents</div>
 
-					{/* All agents option */}
-					<button
-						type="button"
-						onClick={() => selectAgent(null)}
-						className={`w-full text-left px-2 py-1.5 rounded text-sm transition-colors mb-1 ${
-							filters.agents.size === 0 ? "bg-blue-900/50 text-blue-200" : "text-gray-400 hover:bg-gray-800"
-						}`}
-					>
-						All agents
-						<span className="text-xs text-gray-500 ml-1">({baseFilteredEvents.length})</span>
-					</button>
-
 					{agents.map((agent) => {
 						const color = getAgentColor(agents, agent.id)
 						const eventCount = agentEventCounts.get(agent.id) ?? 0
-						const isSelected = selectedAgentId === agent.id
+						const isViewed = viewedAgentId === agent.id
+						const depth = getAgentDepth(agents, agent.id)
 						return (
 							<button
 								key={agent.id}
 								type="button"
-								onClick={() => selectAgent(agent.id)}
-								className={`w-full text-left px-2 py-1.5 rounded text-sm transition-colors flex items-center gap-2 ${
-									isSelected ? "bg-blue-900/50 text-blue-200" : "text-gray-400 hover:bg-gray-800"
+								onClick={() => setViewedAgentId(agent.id)}
+								className={`w-full text-left py-1.5 rounded text-sm transition-colors flex items-center gap-2 ${
+									isViewed ? "bg-blue-900/50 text-blue-200" : "text-gray-400 hover:bg-gray-800"
 								}`}
+								style={{paddingLeft: `${8 + depth * 12}px`, paddingRight: "8px"}}
 							>
 								<div className="w-2 h-2 rounded-full flex-shrink-0" style={{backgroundColor: color}} />
 								<span className="truncate flex-1">{agent.name || agent.id.slice(0, 12)}</span>
@@ -167,47 +328,72 @@ export function ColumnsView({
 
 			{/* Center panel: event stream */}
 			<div className="flex-1 overflow-y-auto min-w-0">
-				{events.length === 0 ? (
-					<div className="text-center py-12 text-gray-500">No events</div>
+				{/* Breadcrumb navigation */}
+				{!isMainAgent && (
+					<div className="sticky top-0 z-10 bg-gray-900/95 backdrop-blur-sm border-b border-gray-800 px-4 py-2.5 flex items-center gap-1.5 text-sm">
+						{breadcrumb.map((node, i) => {
+							const isLast = i === breadcrumb.length - 1
+							const color = getAgentColor(agents, node.id)
+							return (
+								<span key={node.id} className="flex items-center gap-1.5">
+									{i > 0 && <span className="text-gray-600">/</span>}
+									{isLast ? (
+										<span className="text-gray-200 font-medium flex items-center gap-1.5">
+											<span className="inline-block w-2 h-2 rounded-full" style={{backgroundColor: color}} />
+											{node.name || node.id.slice(0, 12)}
+										</span>
+									) : (
+										<button
+											type="button"
+											onClick={() => setViewedAgentId(node.id)}
+											className="text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1.5"
+										>
+											<span className="inline-block w-2 h-2 rounded-full" style={{backgroundColor: color}} />
+											{node.name || node.id.slice(0, 12)}
+										</button>
+									)}
+								</span>
+							)
+						})}
+					</div>
+				)}
+
+				{displayItems.length === 0 ? (
+					<div className="text-center py-12 text-gray-500">No events for this agent</div>
 				) : (
 					<div>
-						{events.map((event) => {
-							const isSelected = selectedEvent?.id === event.id
-							const color = getAgentColor(agents, event.agentId)
-							const agent = agents.find((a) => a.id === event.agentId)
-
+						{displayItems.map((item) => {
+							if (item.kind === "message") {
+								return (
+									<MessageRow
+										key={item.event.id}
+										event={item.event}
+										agents={agents}
+										isSelected={selectedEvent?.id === item.event.id}
+										onSelect={handleSelectEvent}
+									/>
+								)
+							}
+							if (item.kind === "tool-pair") {
+								return (
+									<ToolPairRow
+										key={item.toolUse.id}
+										toolUse={item.toolUse}
+										toolResult={item.toolResult}
+										failed={item.failed}
+										agents={agents}
+										selectedEventId={selectedEvent?.id ?? null}
+										onSelect={handleSelectEvent}
+									/>
+								)
+							}
 							return (
-								<button
-									key={event.id}
-									type="button"
-									onClick={() => handleSelectEvent(isSelected ? null : event)}
-									className={`w-full text-left px-4 py-3 border-b border-gray-800/50 transition-colors ${
-										isSelected ? "bg-blue-900/20" : "hover:bg-gray-800/50"
-									}`}
-								>
-									<div className="flex items-center gap-3 mb-1">
-										{/* Type icon dot */}
-										<div className="w-2 h-2 rounded-full flex-shrink-0" style={{backgroundColor: color}} />
-
-										{/* Agent badge */}
-										<span className="text-xs font-medium truncate max-w-[100px]" style={{color}}>
-											{agent?.name || event.agentId?.slice(0, 8) || "main"}
-										</span>
-
-										{/* Type badge */}
-										<span className={`text-xs px-1.5 py-0.5 rounded ${getEventTypeBadgeClass(event.type)}`}>
-											{event.type}
-										</span>
-
-										{/* Timestamp */}
-										<span className="text-xs text-gray-600 font-mono ml-auto flex-shrink-0">
-											{formatTime(event.timestamp)}
-										</span>
-									</div>
-
-									{/* Summary */}
-									<div className="text-sm text-gray-300 truncate pl-5">{getEventSummary(event)}</div>
-								</button>
+								<AgentTaskCard
+									key={item.toolUse.id}
+									item={item}
+									agents={agents}
+									onDrillIn={() => setViewedAgentId(item.agent.id)}
+								/>
 							)
 						})}
 					</div>
@@ -264,6 +450,210 @@ export function ColumnsView({
 					</div>
 				</>
 			)}
+		</div>
+	)
+}
+
+function getAgentDepth(agents: AgentNode[], agentId: string): number {
+	const agent = agents.find((a) => a.id === agentId)
+	if (!agent || !agent.parent) return 0
+	return 1 + getAgentDepth(agents, agent.parent)
+}
+
+function MessageRow({
+	event,
+	agents,
+	isSelected,
+	onSelect,
+}: {
+	event: Event
+	agents: AgentNode[]
+	isSelected: boolean
+	onSelect: (e: Event | null) => void
+}) {
+	const color = getAgentColor(agents, event.agentId)
+	return (
+		<button
+			type="button"
+			onClick={() => onSelect(isSelected ? null : event)}
+			className={`w-full text-left px-4 py-3 border-b border-gray-800/50 transition-colors ${
+				isSelected ? "bg-blue-900/20" : "hover:bg-gray-800/50"
+			}`}
+		>
+			<div className="flex items-center gap-3 mb-1">
+				<div className="w-2 h-2 rounded-full flex-shrink-0" style={{backgroundColor: color}} />
+				<span className={`text-xs px-1.5 py-0.5 rounded ${getEventTypeBadgeClass(event.type)}`}>
+					{event.type}
+				</span>
+				<span className="text-xs text-gray-600 font-mono ml-auto flex-shrink-0">
+					{formatTime(event.timestamp)}
+				</span>
+			</div>
+			<div className="text-sm text-gray-300 truncate pl-5">{getEventSummary(event)}</div>
+		</button>
+	)
+}
+
+function ToolPairRow({
+	toolUse,
+	toolResult,
+	failed,
+	agents,
+	selectedEventId,
+	onSelect,
+}: {
+	toolUse: Event
+	toolResult: Event | null
+	failed: boolean
+	agents: AgentNode[]
+	selectedEventId: string | null
+	onSelect: (e: Event | null) => void
+}) {
+	const color = getAgentColor(agents, toolUse.agentId)
+	const isUseSelected = selectedEventId === toolUse.id
+	const isResultSelected = toolResult ? selectedEventId === toolResult.id : false
+	const isSelected = isUseSelected || isResultSelected
+
+	const toolName = toolUse.data.type === "tool-use" ? toolUse.data.toolName : "tool"
+	const description = toolUse.data.type === "tool-use" ? toolUse.data.description : undefined
+
+	const resultOutput = toolResult?.data.type === "tool-result" ? toolResult.data.output : null
+	const resultSuccess = toolResult?.data.type === "tool-result" ? toolResult.data.success : null
+
+	return (
+		<div
+			className={`border-b border-gray-800/50 transition-colors ${
+				isSelected ? "bg-blue-900/20" : "hover:bg-gray-800/30"
+			} ${failed ? "border-l-2 border-l-red-500/70" : ""}`}
+		>
+			{/* Tool use line */}
+			<button
+				type="button"
+				onClick={() => onSelect(isUseSelected ? null : toolUse)}
+				className="w-full text-left px-4 py-2"
+			>
+				<div className="flex items-center gap-3">
+					<div className="w-2 h-2 rounded-full flex-shrink-0" style={{backgroundColor: color}} />
+					<span className="text-xs font-medium text-blue-300">{toolName}</span>
+					{description && <span className="text-xs text-gray-500 truncate flex-1">{description}</span>}
+					<span className="text-xs text-gray-600 font-mono ml-auto flex-shrink-0">
+						{formatTime(toolUse.timestamp)}
+					</span>
+				</div>
+			</button>
+
+			{/* Tool result line */}
+			{toolResult && (
+				<button
+					type="button"
+					onClick={() => onSelect(isResultSelected ? null : toolResult)}
+					className="w-full text-left px-4 py-1.5 pb-2"
+				>
+					<div className="flex items-center gap-3 pl-5">
+						{resultSuccess === false ? (
+							<span className="text-xs text-red-400 font-medium">Error</span>
+						) : (
+							<span className="text-xs text-green-400/70">OK</span>
+						)}
+						{resultOutput && (
+							<span className="text-xs text-gray-500 truncate flex-1">{resultOutput.substring(0, 100)}</span>
+						)}
+						<span className="text-xs text-gray-600 font-mono ml-auto flex-shrink-0">
+							{formatTime(toolResult.timestamp)}
+						</span>
+					</div>
+				</button>
+			)}
+		</div>
+	)
+}
+
+function AgentTaskCard({
+	item,
+	agents,
+	onDrillIn,
+}: {
+	item: Extract<DisplayItem, {kind: "agent-task"}>
+	agents: AgentNode[]
+	onDrillIn: () => void
+}) {
+	const agentColor = getAgentColor(agents, item.agent.id)
+	const spawnData = item.agentSpawn?.data.type === "agent-spawn" ? item.agentSpawn.data : null
+	const resultData = item.toolResult?.data.type === "tool-result" ? item.toolResult.data : null
+
+	const agentName = item.agent.name || item.agent.id.slice(0, 16)
+	const prompt = spawnData?.prompt ?? ""
+	const description = spawnData?.description ?? item.agent.description ?? ""
+	const output = resultData?.output ?? ""
+	const success = resultData?.success ?? true
+
+	return (
+		<div className="border-b border-gray-800/50">
+			<div
+				className="mx-3 my-2 rounded-lg border overflow-hidden transition-colors hover:border-gray-600"
+				style={{borderColor: `${agentColor}40`}}
+			>
+				{/* Header bar */}
+				<div className="px-4 py-2.5 flex items-center gap-3" style={{backgroundColor: `${agentColor}10`}}>
+					<div className="w-3 h-3 rounded-full flex-shrink-0" style={{backgroundColor: agentColor}} />
+					<span className="text-sm font-medium text-gray-200">{agentName}</span>
+					{description && <span className="text-xs text-gray-500 truncate flex-1">{description}</span>}
+					{!success && (
+						<span className="text-xs bg-red-900/60 text-red-300 px-1.5 py-0.5 rounded">failed</span>
+					)}
+					<span className="text-xs text-gray-600 font-mono flex-shrink-0">
+						{formatTime(item.toolUse.timestamp)}
+					</span>
+				</div>
+
+				{/* Body */}
+				<div className="px-4 py-3 space-y-2">
+					{/* Prompt (input) */}
+					{prompt && (
+						<div>
+							<div className="text-xs text-gray-500 mb-1">Prompt</div>
+							<div className="text-xs text-gray-400 line-clamp-3 whitespace-pre-wrap">{prompt}</div>
+						</div>
+					)}
+
+					{/* Result (output) */}
+					{output && (
+						<div>
+							<div className="text-xs text-gray-500 mb-1">Result</div>
+							<div
+								className={`text-xs line-clamp-3 whitespace-pre-wrap ${
+									success ? "text-gray-400" : "text-red-400/80"
+								}`}
+							>
+								{output}
+							</div>
+						</div>
+					)}
+				</div>
+
+				{/* Footer with drill-in button */}
+				<div className="px-4 py-2 border-t" style={{borderColor: `${agentColor}20`}}>
+					<button
+						type="button"
+						onClick={onDrillIn}
+						className="text-xs font-medium transition-colors flex items-center gap-1.5"
+						style={{color: agentColor}}
+					>
+						View agent events
+						<svg
+							className="w-3 h-3"
+							fill="none"
+							viewBox="0 0 24 24"
+							strokeWidth={2}
+							stroke="currentColor"
+							role="img"
+							aria-label="Navigate to agent"
+						>
+							<path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+						</svg>
+					</button>
+				</div>
+			</div>
 		</div>
 	)
 }

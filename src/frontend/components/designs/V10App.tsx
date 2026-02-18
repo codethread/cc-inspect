@@ -413,6 +413,9 @@ function FilterDrawer({
 	onTypeFilterChange,
 	agentFilter,
 	onAgentFilterChange,
+	errorsOnly,
+	onErrorsOnlyChange,
+	errorCount,
 }: {
 	open: boolean
 	onClose: () => void
@@ -423,6 +426,9 @@ function FilterDrawer({
 	onTypeFilterChange: (s: Set<EventType>) => void
 	agentFilter: Set<string>
 	onAgentFilterChange: (s: Set<string>) => void
+	errorsOnly: boolean
+	onErrorsOnlyChange: (v: boolean) => void
+	errorCount: number
 }) {
 	useEffect(() => {
 		if (!open) return
@@ -491,6 +497,24 @@ function FilterDrawer({
 							className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-500 transition-colors"
 						/>
 					</label>
+
+					{errorCount > 0 && (
+						<div>
+							<span className="block text-xs font-medium text-zinc-400 mb-2">Errors</span>
+							<button
+								type="button"
+								onClick={() => onErrorsOnlyChange(!errorsOnly)}
+								className={`w-full text-left px-3 py-2 rounded-lg text-sm flex items-center gap-2 transition-colors cursor-pointer ${
+									errorsOnly
+										? "bg-red-500/10 text-red-400 border border-red-500/25"
+										: "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 border border-transparent"
+								}`}
+							>
+								<span className="w-2 h-2 rounded-full bg-red-400 flex-shrink-0" />
+								Show only failures ({errorCount})
+							</button>
+						</div>
+					)}
 
 					<div>
 						<span className="block text-xs font-medium text-zinc-400 mb-2">Event Types</span>
@@ -867,15 +891,31 @@ function ToolGroupAccordion({
 			? group.toolNames.join(", ")
 			: `${group.toolNames.slice(0, 3).join(", ")} +${group.toolNames.length - 3}`
 
+	// Count failures in this group
+	const failureCount = group.events.reduce((count, e) => {
+		if (e.data.type === "tool-use") {
+			const result = toolResultMap.get(e.data.toolId)
+			if (result?.data.type === "tool-result" && !result.data.success) return count + 1
+		}
+		return count
+	}, 0)
+	const hasFailures = failureCount > 0
+
 	return (
-		<div className="border border-zinc-800 rounded-xl overflow-hidden">
+		<div
+			className={`border rounded-xl overflow-hidden ${hasFailures ? "border-red-500/30" : "border-zinc-800"}`}
+		>
 			<button
 				type="button"
 				onClick={() => setExpanded(!expanded)}
-				className="w-full flex items-center gap-3 px-4 py-2.5 bg-zinc-900/50 hover:bg-zinc-800/50 transition-colors cursor-pointer text-left"
+				className={`w-full flex items-center gap-3 px-4 py-2.5 hover:bg-zinc-800/50 transition-colors cursor-pointer text-left ${
+					hasFailures ? "bg-red-500/5" : "bg-zinc-900/50"
+				}`}
 			>
 				<svg
-					className={`w-3 h-3 text-zinc-500 transition-transform flex-shrink-0 ${expanded ? "rotate-90" : ""}`}
+					className={`w-3 h-3 transition-transform flex-shrink-0 ${expanded ? "rotate-90" : ""} ${
+						hasFailures ? "text-red-400" : "text-zinc-500"
+					}`}
 					fill="none"
 					viewBox="0 0 24 24"
 					stroke="currentColor"
@@ -883,35 +923,46 @@ function ToolGroupAccordion({
 				>
 					<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
 				</svg>
-				<span className="text-amber-400 font-mono text-xs font-medium">
+				{hasFailures && <span className="w-1.5 h-1.5 rounded-full bg-red-400 flex-shrink-0" />}
+				<span className={`font-mono text-xs font-medium ${hasFailures ? "text-red-400" : "text-amber-400"}`}>
 					{group.toolNames.length} tool call{group.toolNames.length !== 1 ? "s" : ""}
 				</span>
 				<span className="text-zinc-500 text-xs truncate">{summaryText}</span>
+				{hasFailures && (
+					<span className="text-red-400 text-xs flex-shrink-0 font-medium">{failureCount} failed</span>
+				)}
 			</button>
 			{expanded && (
-				<div className="border-t border-zinc-800">
+				<div className={`border-t ${hasFailures ? "border-red-500/20" : "border-zinc-800"}`}>
 					{group.events.map((event) => {
 						if (event.type === "tool-result") return null
 						const isActive = event.id === selectedEventId
 						const summary = getEventSummary(event)
 						const result = event.data.type === "tool-use" ? toolResultMap.get(event.data.toolId) : null
 						const success = result?.data.type === "tool-result" ? result.data.success : null
+						const isFailed = success === false
 
 						return (
 							<button
 								key={event.id}
 								type="button"
 								onClick={() => onSelectEvent(event)}
-								className={`w-full text-left flex items-center gap-3 px-4 py-2 border-b border-zinc-800/50 last:border-0 transition-colors cursor-pointer ${
-									isActive ? "bg-zinc-800/80" : "hover:bg-zinc-800/40"
+								className={`w-full text-left flex items-center gap-3 px-4 py-2 border-b last:border-0 transition-colors cursor-pointer ${
+									isFailed
+										? `border-l-2 border-l-red-400 bg-red-500/5 border-b-red-500/10 ${isActive ? "bg-red-500/10" : "hover:bg-red-500/8"}`
+										: `border-l-2 border-l-transparent border-b-zinc-800/50 ${isActive ? "bg-zinc-800/80" : "hover:bg-zinc-800/40"}`
 								}`}
 								data-event-id={event.id}
 							>
-								<span className="text-amber-400 font-mono text-xs font-medium flex-shrink-0">
+								<span
+									className={`font-mono text-xs font-medium flex-shrink-0 ${isFailed ? "text-red-400" : "text-amber-400"}`}
+								>
 									{event.data.type === "tool-use" ? event.data.toolName : "result"}
 								</span>
 								{success !== null && (
-									<span className={`text-xs flex-shrink-0 ${success ? "text-emerald-400" : "text-red-400"}`}>
+									<span
+										className={`text-xs flex-shrink-0 ${success ? "text-emerald-400" : "text-red-400 font-semibold"}`}
+									>
 										{success ? "OK" : "ERR"}
 									</span>
 								)}
@@ -1048,21 +1099,28 @@ function TurnView({
 								/>
 							)
 						case "tool-use":
-						case "tool-result":
-							// Stray tool events not in a group (shouldn't happen often)
+						case "tool-result": {
+							// Stray tool events not in a group
+							const isError = event.data.type === "tool-result" && !event.data.success
 							return (
 								<button
 									key={event.id}
 									type="button"
 									onClick={() => onSelectEvent(event)}
-									className={`w-full text-left px-4 py-2 rounded-lg text-sm text-zinc-400 transition-colors cursor-pointer ${
-										isActive ? "bg-zinc-800/50 ring-1 ring-zinc-600" : "hover:bg-zinc-800/30"
+									className={`w-full text-left px-4 py-2 rounded-lg text-sm transition-colors cursor-pointer ${
+										isError
+											? `bg-red-500/5 border border-red-500/20 text-red-300 ${isActive ? "ring-1 ring-red-400/30" : "hover:bg-red-500/8"}`
+											: `text-zinc-400 ${isActive ? "bg-zinc-800/50 ring-1 ring-zinc-600" : "hover:bg-zinc-800/30"}`
 									}`}
 									data-event-id={event.id}
 								>
-									{getEventSummary(event)}
+									<span className="flex items-center gap-2">
+										{isError && <span className="w-1.5 h-1.5 rounded-full bg-red-400 flex-shrink-0" />}
+										{getEventSummary(event)}
+									</span>
 								</button>
 							)
+						}
 						default:
 							return null
 					}
@@ -1080,9 +1138,16 @@ interface FilterCriteria {
 	search: string
 	typeFilter: Set<EventType>
 	agentFilter: Set<string>
+	errorsOnly: boolean
+	failedToolUseIds: Set<string>
 }
 
 function matchesFilters(event: Event, criteria: FilterCriteria): boolean {
+	if (criteria.errorsOnly) {
+		const isFailedResult = event.data.type === "tool-result" && !event.data.success
+		const isLinkedToolUse = event.data.type === "tool-use" && criteria.failedToolUseIds.has(event.data.toolId)
+		if (!isFailedResult && !isLinkedToolUse) return false
+	}
 	if (criteria.typeFilter.size > 0 && !criteria.typeFilter.has(event.type)) return false
 	if (criteria.agentFilter.size > 0 && !criteria.agentFilter.has(event.agentId ?? "")) return false
 	if (criteria.search) {
@@ -1114,16 +1179,33 @@ export function V10App() {
 	const [activeTurnId, setActiveTurnId] = useState<string | null>(null)
 	const [showOutline, setShowOutline] = useState(true)
 	const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
+	const [errorsOnly, setErrorsOnly] = useState(false)
 
 	const agents = useMemo(() => (sessionData ? collectAgents(sessionData.mainAgent) : []), [sessionData])
 	const mainAgentId = sessionData?.mainAgent.id ?? ""
 
+	// Pre-compute error-related data from the full session
+	const {errorCount, failedToolUseIds} = useMemo(() => {
+		if (!sessionData) return {errorCount: 0, failedToolUseIds: new Set<string>()}
+		let count = 0
+		const ids = new Set<string>()
+		for (const e of sessionData.allEvents) {
+			if (e.data.type === "tool-result" && !e.data.success) {
+				count++
+				ids.add(e.data.toolUseId)
+			}
+		}
+		return {errorCount: count, failedToolUseIds: ids}
+	}, [sessionData])
+
 	const filteredEvents = useMemo(
 		() =>
 			sessionData
-				? sessionData.allEvents.filter((e) => matchesFilters(e, {search, typeFilter, agentFilter}))
+				? sessionData.allEvents.filter((e) =>
+						matchesFilters(e, {search, typeFilter, agentFilter, errorsOnly, failedToolUseIds}),
+					)
 				: [],
-		[sessionData, search, typeFilter, agentFilter],
+		[sessionData, search, typeFilter, agentFilter, errorsOnly, failedToolUseIds],
 	)
 
 	const turns = useMemo(() => groupIntoTurns(filteredEvents), [filteredEvents])
@@ -1135,7 +1217,7 @@ export function V10App() {
 	const pinnedEventIdRef = useRef<string | null>(null)
 	const prevFilterKeyRef = useRef("")
 
-	const filterKey = `${search}|${[...typeFilter].join(",")}|${[...agentFilter].join(",")}`
+	const filterKey = `${search}|${[...typeFilter].join(",")}|${[...agentFilter].join(",")}|${errorsOnly}`
 	if (prevFilterKeyRef.current !== filterKey) {
 		const changed = prevFilterKeyRef.current !== ""
 		prevFilterKeyRef.current = filterKey
@@ -1217,7 +1299,7 @@ export function V10App() {
 		pinnedEventIdRef.current = event.id
 	}, [])
 
-	const isFiltered = search || typeFilter.size > 0 || agentFilter.size > 0
+	const isFiltered = search || typeFilter.size > 0 || agentFilter.size > 0 || errorsOnly
 
 	return (
 		<div className="h-screen flex flex-col bg-zinc-950 text-zinc-200">
@@ -1236,6 +1318,21 @@ export function V10App() {
 							{filteredEvents.length}
 							{isFiltered ? ` / ${sessionData.allEvents.length}` : ""} events
 						</span>
+						{errorCount > 0 && (
+							<button
+								type="button"
+								onClick={() => setErrorsOnly(!errorsOnly)}
+								className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+									errorsOnly
+										? "bg-red-500/15 text-red-400 border border-red-500/30"
+										: "text-red-400/60 hover:text-red-400 hover:bg-red-500/5 border border-transparent"
+								}`}
+								title={errorsOnly ? "Show all events" : "Show only errors"}
+							>
+								<span className="w-1.5 h-1.5 rounded-full bg-red-400 flex-shrink-0" />
+								{errorCount} error{errorCount !== 1 ? "s" : ""}
+							</button>
+						)}
 						<button
 							type="button"
 							onClick={() => setShowOutline(!showOutline)}
@@ -1381,6 +1478,9 @@ export function V10App() {
 				onTypeFilterChange={setTypeFilter}
 				agentFilter={agentFilter}
 				onAgentFilterChange={setAgentFilter}
+				errorsOnly={errorsOnly}
+				onErrorsOnlyChange={setErrorsOnly}
+				errorCount={errorCount}
 			/>
 		</div>
 	)
