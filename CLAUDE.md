@@ -81,17 +81,9 @@ Re-exports all SDK types via `export * from "./lib/claude"` so the `#types` impo
 
 ### Frontend (src/frontend/App.tsx, src/frontend/frontend.tsx)
 
-React app with three UI designs, selectable by URL path:
-
-- `/columns` — Three-panel explorer with per-agent drill-down (default)
-- `/matrix` — Agent-column density grid with collapsible sub-agents
-- `/reader` — Structured document reader with turn grouping (self-contained)
-
-The Columns and Matrix designs share the `Header` component for session selection and `SharedFilters`/`shared.tsx` utilities for filtering. The Reader design is fully self-contained — it manages its own session selection and filtering.
+React app that renders a single `SessionView` component — a structured document reader with turn grouping, outline sidebar, detail panel, search modal, and filter drawer. `SessionView` manages its own session selection and filtering.
 
 The app uses TanStack Query (`@tanstack/react-query`) for data fetching, with query/mutation hooks defined in `src/frontend/api.ts`. The `QueryClientProvider` is set up in `frontend.tsx`. CLI-provided sessions are handled by a `useCliSession` hook that attempts to load `/api/session` without parameters. The API layer rehydrates `Date` objects from JSON responses.
-
-Each design has a detailed behaviour doc: see `src/frontend/components/designs/*.md`.
 
 ## File Structure
 
@@ -101,18 +93,11 @@ Each design has a detailed behaviour doc: see `src/frontend/components/designs/*
 - `src/server/index.tsx` - Bun server entry point (CLI binary via shebang)
 - `src/server/routes/` - Thin route handlers using Claude SDK
 - `src/server/utils.ts` - Server-level path validation and constants
-- `src/frontend/App.tsx` - Route-based design switching, shared state for Columns/Matrix
+- `src/frontend/App.tsx` - React app entry point, renders SessionView
 - `src/frontend/api.ts` - TanStack Query hooks, fetch helper, Date rehydration
 - `src/frontend/frontend.tsx` - React DOM mounting with QueryClientProvider
-- `src/frontend/components/Header.tsx` - Session selector (used by Columns/Matrix)
-- `src/frontend/components/DesignSwitcher.tsx` - Nav bar for switching between designs
-- `src/frontend/components/SharedFilters.tsx` - Reusable filter bar (agent chips, type toggles, search)
-- `src/frontend/components/shared.tsx` - Shared utilities (formatTime, filterEvents, collectAllAgents, colors)
+- `src/frontend/components/SessionView.tsx` - Session viewer with timeline, outline, detail panel, search, and filters
 - `src/frontend/components/MarkdownContent.tsx` - Markdown renderer
-- `src/frontend/components/designs/ColumnsView.tsx` - Columns design (`/columns`)
-- `src/frontend/components/designs/MatrixView.tsx` - Matrix design (`/matrix`)
-- `src/frontend/components/designs/V10App.tsx` - Reader design (`/reader`)
-- `src/frontend/components/designs/*.md` - Design behaviour docs
 - `src/frontend/index.html` - HTML entry point that imports React app
 
 ## Code style

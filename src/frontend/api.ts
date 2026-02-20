@@ -1,4 +1,4 @@
-import {useMutation, useQuery, useQueryClient} from "@tanstack/react-query"
+import {useQuery} from "@tanstack/react-query"
 import type {
 	AgentNode,
 	DirectoriesResponse,
@@ -98,20 +98,3 @@ export function useCliSession() {
 	})
 }
 
-export function useDeleteSession() {
-	const queryClient = useQueryClient()
-	return useMutation({
-		mutationFn: async (sessionPath: string) => {
-			const res = await fetch(`/api/session/delete?path=${encodeURIComponent(sessionPath)}`, {
-				method: "DELETE",
-			})
-			const data = await res.json()
-			if (data.status === "error") {
-				throw new Error(data.error || "Failed to delete session")
-			}
-		},
-		onSuccess: () => {
-			queryClient.invalidateQueries({queryKey: ["sessions"]})
-		},
-	})
-}

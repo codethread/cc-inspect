@@ -1,7 +1,7 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from "react"
 import type {AgentNode, Event, EventType, SessionData, SessionHandle} from "#types"
-import {useCliSession, useDirectories, useSessionData, useSessions} from "../../api"
-import {MarkdownContent} from "../MarkdownContent"
+import {useCliSession, useDirectories, useSessionData, useSessions} from "../api"
+import {MarkdownContent} from "./MarkdownContent"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1637,7 +1637,7 @@ function matchesFilters(event: Event, criteria: FilterCriteria): boolean {
 // Main V10 App
 // ---------------------------------------------------------------------------
 
-export function V10App() {
+export function SessionView() {
 	const [sessionPath, setSessionPath] = useState(() => {
 		const params = new URLSearchParams(window.location.search)
 		return params.get("session") ?? ""
@@ -1836,8 +1836,6 @@ export function V10App() {
 			{/* Header */}
 			<header className="flex items-center gap-4 px-6 py-3 bg-zinc-900/80 border-b border-zinc-800 flex-shrink-0 backdrop-blur-sm">
 				<span className="text-sm font-semibold text-zinc-100 tracking-tight">cc-inspect</span>
-				<span className="text-xs text-zinc-600 font-mono">v10</span>
-				<div className="w-px h-4 bg-zinc-800" />
 				<SessionPicker sessionData={sessionData} onSelect={handleSelectSession} />
 
 				<div className="flex-1" />
@@ -1937,9 +1935,6 @@ export function V10App() {
 					</>
 				)}
 
-				<a href="/v1" className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors">
-					designs
-				</a>
 			</header>
 
 			{/* Body: [outline] [timeline] [detail panel] */}
