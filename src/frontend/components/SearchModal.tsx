@@ -1,0 +1,238 @@
+import {useEffect, useMemo, useRef, useState} from "react"
+import type {AgentNode, Event, EventType} from "#types"
+import {DetailPanel} from "./DetailPanel"
+import {getAgentColorSet} from "./session-view/agent-colors"
+import {
+	EVENT_TYPE_COLOR,
+	EVENT_TYPE_LABEL,
+	EVENT_TYPES,
+	formatTime,
+	getEventSearchableText,
+	getEventSummary,
+} from "./session-view/helpers"
+
+export function SearchModal({
+	events,
+	agents,
+	onGoToTimeline,
+	onClose,
+}: {
+	events: Event[]
+	agents: AgentNode[]
+	onGoToTimeline: (event: Event) => void
+	onClose: () => void
+}) {
+	const [query, setQuery] = useState("")
+	const [selectedIndex, setSelectedIndex] = useState(0)
+	const [typeFilter, setTypeFilter] = useState<Set<EventType>>(new Set())
+	const inputRef = useRef<HTMLInputElement>(null)
+	const listRef = useRef<HTMLDivElement>(null)
+
+	const toggleType = (type: EventType) => {
+		const next = new Set(typeFilter)
+		if (next.has(type)) next.delete(type)
+		else next.add(type)
+		setTypeFilter(next)
+	}
+
+	const results = useMemo(() => {
+		if (!query.trim()) return []
+		const q = query.toLowerCase()
+		return events
+			.filter((e) => {
+				if (typeFilter.size > 0 && !typeFilter.has(e.type)) return false
+				return getEventSearchableText(e).includes(q)
+			})
+			.slice(0, 300)
+	}, [events, query, typeFilter])
+
+	const boundedIndex = results.length > 0 ? Math.min(selectedIndex, results.length - 1) : 0
+	const previewEvent = results[boundedIndex] ?? null
+
+	useEffect(() => {
+		inputRef.current?.focus()
+	}, [])
+
+	useEffect(() => {
+		const list = listRef.current
+		if (!list) return
+		const el = list.children[boundedIndex] as HTMLElement | undefined
+		el?.scrollIntoView({block: "nearest"})
+	}, [boundedIndex])
+
+	useEffect(() => {
+		function handleKey(e: KeyboardEvent) {
+			if (e.key === "Escape") {
+				onClose()
+			} else if (e.key === "ArrowDown") {
+				e.preventDefault()
+				setSelectedIndex((i) => Math.min(i + 1, results.length - 1))
+			} else if (e.key === "ArrowUp") {
+				e.preventDefault()
+				setSelectedIndex((i) => Math.max(i - 1, 0))
+			} else if (e.key === "Enter" && previewEvent) {
+				e.preventDefault()
+				onGoToTimeline(previewEvent)
+				onClose()
+			}
+		}
+		document.addEventListener("keydown", handleKey)
+		return () => document.removeEventListener("keydown", handleKey)
+	}, [results, previewEvent, onGoToTimeline, onClose])
+
+	return (
+		<>
+			{/* Backdrop */}
+			<button
+				type="button"
+				className="fixed inset-0 bg-black/60 z-50 cursor-default backdrop-blur-sm"
+				onClick={onClose}
+				aria-label="Close search"
+			/>
+			{/* Modal: two-panel layout */}
+			<div
+				className="fixed left-1/2 top-[10%] -translate-x-1/2 w-[1000px] max-w-[calc(100vw-1rem)] z-50 bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl flex overflow-hidden"
+				style={{maxHeight: "78vh"}}
+			>
+				{/* Left panel: search + results */}
+				<div className="w-80 flex-shrink-0 flex flex-col border-r border-zinc-800">
+					{/* Search input */}
+					<div className="flex items-center gap-3 px-4 py-3 border-b border-zinc-800 flex-shrink-0">
+						<svg
+							className="w-4 h-4 text-zinc-500 flex-shrink-0"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+							aria-hidden="true"
+						>
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth={2}
+								d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+							/>
+						</svg>
+						<input
+							ref={inputRef}
+							type="text"
+							value={query}
+							onChange={(e) => setQuery(e.target.value)}
+							placeholder="Search events..."
+							className="flex-1 bg-transparent text-zinc-100 placeholder-zinc-600 text-sm focus:outline-none"
+						/>
+						<kbd className="text-xs text-zinc-600 bg-zinc-800 px-1.5 py-0.5 rounded font-mono flex-shrink-0">
+							esc
+						</kbd>
+					</div>
+
+					{/* Type filter chips */}
+					<div className="flex flex-wrap gap-1.5 px-4 py-2.5 border-b border-zinc-800 flex-shrink-0">
+						{EVENT_TYPES.map((type) => {
+							const on = typeFilter.has(type)
+							return (
+								<button
+									key={type}
+									type="button"
+									onClick={() => toggleType(type)}
+									className={`px-2 py-0.5 rounded text-xs font-mono transition-opacity cursor-pointer ${EVENT_TYPE_COLOR[type]} ${
+										typeFilter.size === 0
+											? "opacity-40 hover:opacity-70"
+											: on
+												? "opacity-100 ring-1 ring-current"
+												: "opacity-20 hover:opacity-40"
+									}`}
+								>
+									{EVENT_TYPE_LABEL[type]}
+								</button>
+							)
+						})}
+					</div>
+
+					{/* Column headers */}
+					{results.length > 0 && (
+						<div className="flex items-center gap-2 px-4 py-1.5 border-b border-zinc-800/60 flex-shrink-0">
+							<span className="text-xs text-zinc-600 uppercase tracking-wider w-16 flex-shrink-0">Time</span>
+							<span className="text-xs text-zinc-600 uppercase tracking-wider w-16 flex-shrink-0">Type</span>
+							<span className="text-xs text-zinc-600 uppercase tracking-wider flex-1">Match</span>
+						</div>
+					)}
+
+					{/* Results list */}
+					<div ref={listRef} className="flex-1 overflow-y-auto min-h-0">
+						{!query.trim() && (
+							<div className="px-4 py-10 text-center text-zinc-700 text-sm">Type to search all events</div>
+						)}
+						{query.trim() && results.length === 0 && (
+							<div className="px-4 py-10 text-center text-zinc-600 text-sm">No events match</div>
+						)}
+						{results.map((event, i) => {
+							const isSelected = i === boundedIndex
+							const colors = getAgentColorSet(agents, event.agentId)
+							return (
+								<button
+									key={event.id}
+									type="button"
+									onClick={() => setSelectedIndex(i)}
+									onMouseEnter={() => setSelectedIndex(i)}
+									className={`w-full text-left flex items-center gap-2 px-4 py-2 border-b border-zinc-800/50 last:border-0 transition-colors cursor-pointer ${
+										isSelected ? "bg-zinc-800" : "hover:bg-zinc-800/50"
+									}`}
+								>
+									<span className="text-xs text-zinc-600 font-mono tabular-nums flex-shrink-0 w-16">
+										{formatTime(event.timestamp)}
+									</span>
+									<span className={`text-xs font-mono flex-shrink-0 w-16 ${EVENT_TYPE_COLOR[event.type]}`}>
+										{EVENT_TYPE_LABEL[event.type]}
+									</span>
+									{agents.length > 1 && (
+										<span
+											className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+											style={{backgroundColor: colors.dot}}
+										/>
+									)}
+									<span className="text-zinc-400 text-xs truncate">{getEventSummary(event)}</span>
+								</button>
+							)
+						})}
+					</div>
+
+					{/* Footer: count + keyboard hints */}
+					<div className="flex items-center gap-2 px-4 py-2 border-t border-zinc-800 flex-shrink-0">
+						<span className="text-xs text-zinc-600">
+							{query.trim() && results.length > 0
+								? `${results.length} result${results.length !== 1 ? "s" : ""}`
+								: ""}
+						</span>
+						<div className="flex items-center gap-1.5 ml-auto text-xs text-zinc-600">
+							<kbd className="bg-zinc-800 px-1.5 py-0.5 rounded font-mono">↑↓</kbd>
+							<kbd className="bg-zinc-800 px-1.5 py-0.5 rounded font-mono">↵</kbd>
+							<span>timeline</span>
+						</div>
+					</div>
+				</div>
+
+				{/* Right panel: detail view */}
+				<div className="flex-1 min-w-0 min-h-0 flex flex-col">
+					{previewEvent ? (
+						<DetailPanel
+							event={previewEvent}
+							allEvents={events}
+							agents={agents}
+							onNavigate={() => {
+								onGoToTimeline(previewEvent)
+								onClose()
+							}}
+						/>
+					) : (
+						<div className="flex-1 flex items-center justify-center bg-zinc-950 border-l border-zinc-800">
+							<div className="text-center px-8">
+								<div className="text-zinc-600 text-sm mb-1">No event selected</div>
+								<div className="text-zinc-700 text-xs">Type to search, then navigate results</div>
+							</div>
+						</div>
+					)}
+				</div>
+			</div>
+		</>
+	)
+}

@@ -85,6 +85,8 @@ React app that renders a single `SessionView` component — a structured documen
 
 The app uses TanStack Query (`@tanstack/react-query`) for data fetching, with query/mutation hooks defined in `src/frontend/api.ts`. The `QueryClientProvider` is set up in `frontend.tsx`. CLI-provided sessions are handled by a `useCliSession` hook that attempts to load `/api/session` without parameters. The API layer rehydrates `Date` objects from JSON responses.
 
+**UI design and behaviour**: see `DESIGN.md` at the project root. This is the authoritative description of all layout, interactions, and event rendering — read it before working on the frontend, and update it whenever user-visible behaviour changes.
+
 ## File Structure
 
 - `src/lib/claude/` - Self-contained Claude Code SDK (types, parser, errors, Claude class)
@@ -96,7 +98,16 @@ The app uses TanStack Query (`@tanstack/react-query`) for data fetching, with qu
 - `src/frontend/App.tsx` - React app entry point, renders SessionView
 - `src/frontend/api.ts` - TanStack Query hooks, fetch helper, Date rehydration
 - `src/frontend/frontend.tsx` - React DOM mounting with QueryClientProvider
-- `src/frontend/components/SessionView.tsx` - Session viewer with timeline, outline, detail panel, search, and filters
+- `src/frontend/components/SessionView.tsx` - Main component and state management
+- `src/frontend/components/SessionPicker.tsx` - Session/project dropdown
+- `src/frontend/components/Outline.tsx` - Left sidebar navigation
+- `src/frontend/components/FilterDrawer.tsx` - Slide-out filter panel
+- `src/frontend/components/SearchModal.tsx` - ⌘K full-text search modal
+- `src/frontend/components/DetailPanel.tsx` - Right-side event detail panel
+- `src/frontend/components/TurnView.tsx` - Turn renderer with all event block types
+- `src/frontend/components/ToolGroupAccordion.tsx` - Collapsible tool call group accordion
+- `src/frontend/components/SubagentSectionView.tsx` - Bordered subagent section wrapper
+- `src/frontend/components/session-view/` - Pure TS utilities: types, helpers, agent-colors, grouping, filtering
 - `src/frontend/components/MarkdownContent.tsx` - Markdown renderer
 - `src/frontend/index.html` - HTML entry point that imports React app
 
