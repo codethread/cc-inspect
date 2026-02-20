@@ -134,20 +134,27 @@ interface Turn {
 // Sort turns by the position of their first event in the original events array —
 // that array is already timestamp-sorted by the server, and integer index comparison
 // avoids any Date rehydration / NaN issues.
-function groupIntoTurns(events: Event[]): Turn[] {
+//
+// Task tool-results (data.agentId set) live in allEvents with agentId = subagentId
+// (from entry.agentId in the JSONL), but logically belong to the main agent's flow.
+// We route them to the main agent bucket so they pair with their Task tool-uses and
+// don't create orphaned "0 tool calls" blocks in subagent sections.
+function groupIntoTurns(events: Event[], mainAgentId: string): Turn[] {
 	const eventIndex = new Map<string, number>()
 	events.forEach((e, i) => eventIndex.set(e.id, i))
 
 	const byAgent = new Map<string | null, Event[]>()
 	for (const event of events) {
-		const list = byAgent.get(event.agentId)
+		const isTaskResult = event.data.type === "tool-result" && Boolean(event.data.agentId)
+		const key = isTaskResult ? mainAgentId : event.agentId
+		const list = byAgent.get(key)
 		if (list) list.push(event)
-		else byAgent.set(event.agentId, [event])
+		else byAgent.set(key, [event])
 	}
 
 	const allTurns: Turn[] = []
 	for (const agentEvents of byAgent.values()) {
-		allTurns.push(...buildAgentTurns(agentEvents))
+		allTurns.push(...buildAgentTurns(agentEvents, mainAgentId))
 	}
 
 	return allTurns.sort((a, b) => {
@@ -157,16 +164,24 @@ function groupIntoTurns(events: Event[]): Turn[] {
 	})
 }
 
-function buildAgentTurns(events: Event[]): Turn[] {
+// Builds turns for a single agent's event list.
+// For the main agent, splits after a batch of Task tool-results so subagent sections
+// can interleave chronologically: task-uses + task-results stay in the same pre-split
+// turn (keeping accordion pairing intact), and the main agent's continuation
+// (thinking/assistant) starts a new turn whose sort position falls after subagents.
+function buildAgentTurns(events: Event[], mainAgentId: string): Turn[] {
 	const turns: Turn[] = []
 	let current: Turn | null = null
+	let pendingTaskResultSplit = false
 
 	for (const event of events) {
 		const isUserMsg = event.type === "user-message"
 		const isSpawn = event.type === "agent-spawn"
+		const isTaskResult = event.data.type === "tool-result" && Boolean(event.data.agentId)
 
 		if (isUserMsg || isSpawn) {
 			if (current) turns.push(current)
+			pendingTaskResultSplit = false
 			current = {
 				id: event.id,
 				kind: isUserMsg ? "user" : "agent-spawn",
@@ -182,6 +197,17 @@ function buildAgentTurns(events: Event[]): Turn[] {
 							: "",
 			}
 		} else {
+			// After a batch of Task tool-results, split when the first non-task-result
+			// arrives. This keeps task-use/result pairs together in the pre-split turn
+			// and starts a new main-agent turn whose sort position falls after subagents.
+			if (pendingTaskResultSplit && !isTaskResult && current && event.agentId === mainAgentId) {
+				turns.push(current)
+				current = null
+				pendingTaskResultSplit = false
+			}
+
+			if (isTaskResult) pendingTaskResultSplit = true
+
 			if (!current) {
 				current = {
 					id: event.id,
@@ -1663,7 +1689,7 @@ export function V10App() {
 		[sessionData, search, typeFilter, agentFilter, errorsOnly, failedToolUseIds],
 	)
 
-	const turns = useMemo(() => groupIntoTurns(filteredEvents), [filteredEvents])
+	const turns = useMemo(() => groupIntoTurns(filteredEvents, mainAgentId), [filteredEvents, mainAgentId])
 
 	const turnRefs = useRef<Map<string, HTMLDivElement | null>>(new Map())
 	const timelineRef = useRef<HTMLElement | null>(null)

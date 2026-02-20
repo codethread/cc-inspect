@@ -28,9 +28,22 @@ The left sidebar shows an indented outline of the session:
 
 An `IntersectionObserver` tracks which turn is currently visible in the timeline and highlights it in the outline. Clicking any outline item smooth-scrolls to that turn in the timeline.
 
+### Subagent grouping
+
+When a session includes sub-agents (spawned via the Task tool), their events are visually grouped into bordered, indented sections distinct from the main agent's flow.
+
+Each subagent section:
+- Has a **coloured header** showing the agent's description (from the Task tool call), falling back to name, subagentType, then truncated ID
+- Is **indented** with a left margin and a rounded border in the agent's colour
+- Contains all turns belonging to that agent
+
+**Ordering**: subagent sections are interleaved chronologically with main-agent turns. The main agent's turn is split just before it resumes after receiving the subagent's result, so the section appears between the Task tool-calls and the main agent's continuation. Parallel subagents appear in the order their events start.
+
+**Parallel agents**: when multiple subagents run concurrently, their events are separated by agent before grouping so that tool-use/result pairs from the same agent always land in the same turn, regardless of how the events interleave by timestamp in the session log.
+
 ### Turn grouping
 
-Events are grouped into conversational **turns**. A turn starts with a user-message or agent-spawn and includes all subsequent events until the next turn boundary. Each turn shows:
+Events are grouped into conversational **turns** per agent. A turn starts with a user-message or agent-spawn and includes all subsequent events until the next turn boundary. Each turn shows:
 
 - The originating event (user message or agent spawn) with agent indicator
 - A summary line
