@@ -104,6 +104,17 @@ function getEventSummary(event: Event): string {
 	}
 }
 
+function getEventSearchableText(event: Event): string {
+	const parts = [getEventSummary(event), event.agentName ?? "", event.type]
+	if (event.data.type === "tool-use") {
+		for (const value of Object.values(event.data.input)) {
+			if (typeof value === "string") parts.push(value)
+			else if (value != null) parts.push(JSON.stringify(value))
+		}
+	}
+	return parts.join(" ").toLowerCase()
+}
+
 // ---------------------------------------------------------------------------
 // Turn grouping
 // ---------------------------------------------------------------------------
@@ -118,7 +129,35 @@ interface Turn {
 	summary: string
 }
 
+// Group events per agent first so that tool-use/result pairs from the same agent
+// always land in the same turn, even when parallel agents interleave in allEvents.
+// Sort turns by the position of their first event in the original events array —
+// that array is already timestamp-sorted by the server, and integer index comparison
+// avoids any Date rehydration / NaN issues.
 function groupIntoTurns(events: Event[]): Turn[] {
+	const eventIndex = new Map<string, number>()
+	events.forEach((e, i) => eventIndex.set(e.id, i))
+
+	const byAgent = new Map<string | null, Event[]>()
+	for (const event of events) {
+		const list = byAgent.get(event.agentId)
+		if (list) list.push(event)
+		else byAgent.set(event.agentId, [event])
+	}
+
+	const allTurns: Turn[] = []
+	for (const agentEvents of byAgent.values()) {
+		allTurns.push(...buildAgentTurns(agentEvents))
+	}
+
+	return allTurns.sort((a, b) => {
+		const aIdx = eventIndex.get(a.events[0]?.id ?? "") ?? 0
+		const bIdx = eventIndex.get(b.events[0]?.id ?? "") ?? 0
+		return aIdx - bIdx
+	})
+}
+
+function buildAgentTurns(events: Event[]): Turn[] {
 	const turns: Turn[] = []
 	let current: Turn | null = null
 
@@ -217,12 +256,42 @@ function groupTurnEvents(turnEvents: Event[], pairedResultIds: Set<string>): Tim
 // ---------------------------------------------------------------------------
 
 const AGENT_COLORS = [
-	{bg: "bg-blue-500/8", border: "border-blue-500/20", text: "text-blue-400", dot: "#60a5fa"},
-	{bg: "bg-violet-500/8", border: "border-violet-500/20", text: "text-violet-400", dot: "#a78bfa"},
-	{bg: "bg-rose-500/8", border: "border-rose-500/20", text: "text-rose-400", dot: "#fb7185"},
-	{bg: "bg-amber-500/8", border: "border-amber-500/20", text: "text-amber-400", dot: "#fbbf24"},
-	{bg: "bg-emerald-500/8", border: "border-emerald-500/20", text: "text-emerald-400", dot: "#34d399"},
-	{bg: "bg-cyan-500/8", border: "border-cyan-500/20", text: "text-cyan-400", dot: "#22d3ee"},
+	{
+		bg: "bg-blue-500/8",
+		border: "border-blue-500/20",
+		text: "text-blue-400",
+		dot: "#60a5fa",
+	},
+	{
+		bg: "bg-violet-500/8",
+		border: "border-violet-500/20",
+		text: "text-violet-400",
+		dot: "#a78bfa",
+	},
+	{
+		bg: "bg-rose-500/8",
+		border: "border-rose-500/20",
+		text: "text-rose-400",
+		dot: "#fb7185",
+	},
+	{
+		bg: "bg-amber-500/8",
+		border: "border-amber-500/20",
+		text: "text-amber-400",
+		dot: "#fbbf24",
+	},
+	{
+		bg: "bg-emerald-500/8",
+		border: "border-emerald-500/20",
+		text: "text-emerald-400",
+		dot: "#34d399",
+	},
+	{
+		bg: "bg-cyan-500/8",
+		border: "border-cyan-500/20",
+		text: "text-cyan-400",
+		dot: "#22d3ee",
+	},
 ] as const
 
 function getAgentColorSet(agents: AgentNode[], agentId: string | null) {
@@ -555,12 +624,267 @@ function FilterDrawer({
 										>
 											<span
 												className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-												style={{backgroundColor: active ? colors.dot : "#52525b"}}
+												style={{
+													backgroundColor: active ? colors.dot : "#52525b",
+												}}
 											/>
 											{a.name ?? a.id.slice(0, 12)}
 										</button>
 									)
 								})}
+							</div>
+						</div>
+					)}
+				</div>
+			</div>
+		</>
+	)
+}
+
+// ---------------------------------------------------------------------------
+// Search Modal (⌘K)
+// ---------------------------------------------------------------------------
+
+const EVENT_TYPE_LABEL: Record<EventType, string> = {
+	"user-message": "user",
+	"assistant-message": "assistant",
+	"tool-use": "tool-use",
+	"tool-result": "result",
+	thinking: "thinking",
+	"agent-spawn": "spawn",
+	summary: "summary",
+}
+
+const EVENT_TYPE_COLOR: Record<EventType, string> = {
+	"user-message": "text-sky-400",
+	"assistant-message": "text-violet-400",
+	"tool-use": "text-amber-400",
+	"tool-result": "text-emerald-400",
+	thinking: "text-fuchsia-400",
+	"agent-spawn": "text-orange-400",
+	summary: "text-zinc-500",
+}
+
+function SearchModal({
+	events,
+	agents,
+	onGoToTimeline,
+	onClose,
+}: {
+	events: Event[]
+	agents: AgentNode[]
+	onGoToTimeline: (event: Event) => void
+	onClose: () => void
+}) {
+	const [query, setQuery] = useState("")
+	const [selectedIndex, setSelectedIndex] = useState(0)
+	const [typeFilter, setTypeFilter] = useState<Set<EventType>>(new Set())
+	const inputRef = useRef<HTMLInputElement>(null)
+	const listRef = useRef<HTMLDivElement>(null)
+
+	const toggleType = (type: EventType) => {
+		const next = new Set(typeFilter)
+		if (next.has(type)) next.delete(type)
+		else next.add(type)
+		setTypeFilter(next)
+	}
+
+	const results = useMemo(() => {
+		if (!query.trim()) return []
+		const q = query.toLowerCase()
+		return events
+			.filter((e) => {
+				if (typeFilter.size > 0 && !typeFilter.has(e.type)) return false
+				return getEventSearchableText(e).includes(q)
+			})
+			.slice(0, 300)
+	}, [events, query, typeFilter])
+
+	// Clamp selection to valid range; effectively resets to 0 when results shrink
+	const boundedIndex = results.length > 0 ? Math.min(selectedIndex, results.length - 1) : 0
+	const previewEvent = results[boundedIndex] ?? null
+
+	// Focus input on mount
+	useEffect(() => {
+		inputRef.current?.focus()
+	}, [])
+
+	// Scroll selected row into view
+	useEffect(() => {
+		const list = listRef.current
+		if (!list) return
+		const el = list.children[boundedIndex] as HTMLElement | undefined
+		el?.scrollIntoView({block: "nearest"})
+	}, [boundedIndex])
+
+	useEffect(() => {
+		function handleKey(e: KeyboardEvent) {
+			if (e.key === "Escape") {
+				onClose()
+			} else if (e.key === "ArrowDown") {
+				e.preventDefault()
+				setSelectedIndex((i) => Math.min(i + 1, results.length - 1))
+			} else if (e.key === "ArrowUp") {
+				e.preventDefault()
+				setSelectedIndex((i) => Math.max(i - 1, 0))
+			} else if (e.key === "Enter" && previewEvent) {
+				e.preventDefault()
+				onGoToTimeline(previewEvent)
+				onClose()
+			}
+		}
+		document.addEventListener("keydown", handleKey)
+		return () => document.removeEventListener("keydown", handleKey)
+	}, [results, previewEvent, onGoToTimeline, onClose])
+
+	return (
+		<>
+			{/* Backdrop */}
+			<button
+				type="button"
+				className="fixed inset-0 bg-black/60 z-50 cursor-default backdrop-blur-sm"
+				onClick={onClose}
+				aria-label="Close search"
+			/>
+			{/* Modal: two-panel layout */}
+			<div
+				className="fixed left-1/2 top-[10%] -translate-x-1/2 w-[1000px] max-w-[calc(100vw-1rem)] z-50 bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl flex overflow-hidden"
+				style={{maxHeight: "78vh"}}
+			>
+				{/* Left panel: search + results */}
+				<div className="w-80 flex-shrink-0 flex flex-col border-r border-zinc-800">
+					{/* Search input */}
+					<div className="flex items-center gap-3 px-4 py-3 border-b border-zinc-800 flex-shrink-0">
+						<svg
+							className="w-4 h-4 text-zinc-500 flex-shrink-0"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+							aria-hidden="true"
+						>
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth={2}
+								d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+							/>
+						</svg>
+						<input
+							ref={inputRef}
+							type="text"
+							value={query}
+							onChange={(e) => setQuery(e.target.value)}
+							placeholder="Search events..."
+							className="flex-1 bg-transparent text-zinc-100 placeholder-zinc-600 text-sm focus:outline-none"
+						/>
+						<kbd className="text-xs text-zinc-600 bg-zinc-800 px-1.5 py-0.5 rounded font-mono flex-shrink-0">
+							esc
+						</kbd>
+					</div>
+
+					{/* Type filter chips */}
+					<div className="flex flex-wrap gap-1.5 px-4 py-2.5 border-b border-zinc-800 flex-shrink-0">
+						{EVENT_TYPES.map((type) => {
+							const on = typeFilter.has(type)
+							return (
+								<button
+									key={type}
+									type="button"
+									onClick={() => toggleType(type)}
+									className={`px-2 py-0.5 rounded text-xs font-mono transition-opacity cursor-pointer ${EVENT_TYPE_COLOR[type]} ${
+										typeFilter.size === 0
+											? "opacity-40 hover:opacity-70"
+											: on
+												? "opacity-100 ring-1 ring-current"
+												: "opacity-20 hover:opacity-40"
+									}`}
+								>
+									{EVENT_TYPE_LABEL[type]}
+								</button>
+							)
+						})}
+					</div>
+
+					{/* Column headers */}
+					{results.length > 0 && (
+						<div className="flex items-center gap-2 px-4 py-1.5 border-b border-zinc-800/60 flex-shrink-0">
+							<span className="text-xs text-zinc-600 uppercase tracking-wider w-16 flex-shrink-0">Time</span>
+							<span className="text-xs text-zinc-600 uppercase tracking-wider w-16 flex-shrink-0">Type</span>
+							<span className="text-xs text-zinc-600 uppercase tracking-wider flex-1">Match</span>
+						</div>
+					)}
+
+					{/* Results list */}
+					<div ref={listRef} className="flex-1 overflow-y-auto min-h-0">
+						{!query.trim() && (
+							<div className="px-4 py-10 text-center text-zinc-700 text-sm">Type to search all events</div>
+						)}
+						{query.trim() && results.length === 0 && (
+							<div className="px-4 py-10 text-center text-zinc-600 text-sm">No events match</div>
+						)}
+						{results.map((event, i) => {
+							const isSelected = i === boundedIndex
+							const colors = getAgentColorSet(agents, event.agentId)
+							return (
+								<button
+									key={event.id}
+									type="button"
+									onClick={() => setSelectedIndex(i)}
+									onMouseEnter={() => setSelectedIndex(i)}
+									className={`w-full text-left flex items-center gap-2 px-4 py-2 border-b border-zinc-800/50 last:border-0 transition-colors cursor-pointer ${
+										isSelected ? "bg-zinc-800" : "hover:bg-zinc-800/50"
+									}`}
+								>
+									<span className="text-xs text-zinc-600 font-mono tabular-nums flex-shrink-0 w-16">
+										{formatTime(event.timestamp)}
+									</span>
+									<span className={`text-xs font-mono flex-shrink-0 w-16 ${EVENT_TYPE_COLOR[event.type]}`}>
+										{EVENT_TYPE_LABEL[event.type]}
+									</span>
+									{agents.length > 1 && (
+										<span
+											className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+											style={{backgroundColor: colors.dot}}
+										/>
+									)}
+									<span className="text-zinc-400 text-xs truncate">{getEventSummary(event)}</span>
+								</button>
+							)
+						})}
+					</div>
+
+					{/* Footer: count + keyboard hints */}
+					<div className="flex items-center gap-2 px-4 py-2 border-t border-zinc-800 flex-shrink-0">
+						<span className="text-xs text-zinc-600">
+							{query.trim() && results.length > 0
+								? `${results.length} result${results.length !== 1 ? "s" : ""}`
+								: ""}
+						</span>
+						<div className="flex items-center gap-1.5 ml-auto text-xs text-zinc-600">
+							<kbd className="bg-zinc-800 px-1.5 py-0.5 rounded font-mono">↑↓</kbd>
+							<kbd className="bg-zinc-800 px-1.5 py-0.5 rounded font-mono">↵</kbd>
+							<span>timeline</span>
+						</div>
+					</div>
+				</div>
+
+				{/* Right panel: detail view */}
+				<div className="flex-1 min-w-0 min-h-0 flex flex-col">
+					{previewEvent ? (
+						<DetailPanel
+							event={previewEvent}
+							allEvents={events}
+							agents={agents}
+							onNavigate={() => {
+								onGoToTimeline(previewEvent)
+								onClose()
+							}}
+						/>
+					) : (
+						<div className="flex-1 flex items-center justify-center bg-zinc-950 border-l border-zinc-800">
+							<div className="text-center px-8">
+								<div className="text-zinc-600 text-sm mb-1">No event selected</div>
+								<div className="text-zinc-700 text-xs">Type to search, then navigate results</div>
 							</div>
 						</div>
 					)}
@@ -578,10 +902,12 @@ function DetailPanel({
 	event,
 	allEvents,
 	agents,
+	onNavigate,
 }: {
 	event: Event | null
 	allEvents: Event[]
 	agents: AgentNode[]
+	onNavigate?: () => void
 }) {
 	if (!event) {
 		return (
@@ -617,6 +943,24 @@ function DetailPanel({
 				<span className="text-xs text-zinc-600 font-mono tabular-nums ml-auto">
 					{formatTime(event.timestamp)}
 				</span>
+				{onNavigate && (
+					<button
+						type="button"
+						onClick={onNavigate}
+						className="flex items-center gap-1 px-2 py-0.5 rounded-md text-xs text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition-colors cursor-pointer ml-2"
+						title="Open in timeline"
+					>
+						<svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth={2}
+								d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+							/>
+						</svg>
+						timeline
+					</button>
+				)}
 			</div>
 
 			{/* Content */}
@@ -925,7 +1269,8 @@ function ToolGroupAccordion({
 				</svg>
 				{hasFailures && <span className="w-1.5 h-1.5 rounded-full bg-red-400 flex-shrink-0" />}
 				<span className={`font-mono text-xs font-medium ${hasFailures ? "text-red-400" : "text-amber-400"}`}>
-					{group.toolNames.length} tool call{group.toolNames.length !== 1 ? "s" : ""}
+					{group.toolNames.length} tool call
+					{group.toolNames.length !== 1 ? "s" : ""}
 				</span>
 				<span className="text-zinc-500 text-xs truncate">{summaryText}</span>
 				{hasFailures && (
@@ -980,6 +1325,52 @@ function ToolGroupAccordion({
 }
 
 // ---------------------------------------------------------------------------
+// Subagent section grouping
+// ---------------------------------------------------------------------------
+
+interface MainTurnSection {
+	kind: "main"
+	turn: Turn
+}
+
+interface SubagentSection {
+	kind: "subagent"
+	agentId: string
+	agent: AgentNode | null
+	turns: Turn[]
+}
+
+type TurnSection = MainTurnSection | SubagentSection
+
+function groupTurnsIntoSections(turns: Turn[], mainAgentId: string, agents: AgentNode[]): TurnSection[] {
+	const sections: TurnSection[] = []
+	let current: SubagentSection | null = null
+
+	for (const turn of turns) {
+		const isMain = turn.agentId === mainAgentId || turn.agentId == null
+
+		if (isMain) {
+			if (current) {
+				sections.push(current)
+				current = null
+			}
+			sections.push({kind: "main", turn})
+		} else {
+			const agentId = turn.agentId
+			if (current && current.agentId === agentId) {
+				current.turns.push(turn)
+			} else {
+				if (current) sections.push(current)
+				const agent = agents.find((a) => a.id === agentId) ?? null
+				current = {kind: "subagent", agentId, agent, turns: [turn]}
+			}
+		}
+	}
+	if (current) sections.push(current)
+	return sections
+}
+
+// ---------------------------------------------------------------------------
 // Turn view (reworked)
 // ---------------------------------------------------------------------------
 
@@ -989,12 +1380,14 @@ function TurnView({
 	allEvents,
 	selectedEventId,
 	onSelectEvent,
+	hideAgentLabel,
 }: {
 	turn: Turn
 	agents: AgentNode[]
 	allEvents: Event[]
 	selectedEventId: string | null
 	onSelectEvent: (event: Event) => void
+	hideAgentLabel?: boolean
 }) {
 	const colors = getAgentColorSet(agents, turn.agentId)
 
@@ -1026,7 +1419,7 @@ function TurnView({
 
 	return (
 		<div className="scroll-mt-16">
-			{agents.length > 1 && (
+			{!hideAgentLabel && agents.length > 1 && (
 				<div className="flex items-center gap-2 mb-2">
 					<span className="w-2 h-2 rounded-full" style={{backgroundColor: colors.dot}} />
 					<span className={`text-xs font-medium ${colors.text}`}>
@@ -1131,6 +1524,63 @@ function TurnView({
 }
 
 // ---------------------------------------------------------------------------
+// Subagent section view
+// ---------------------------------------------------------------------------
+
+function SubagentSectionView({
+	section,
+	agents,
+	allEvents,
+	selectedEventId,
+	onSelectEvent,
+	turnRefs,
+}: {
+	section: SubagentSection
+	agents: AgentNode[]
+	allEvents: Event[]
+	selectedEventId: string | null
+	onSelectEvent: (event: Event) => void
+	turnRefs: {current: Map<string, HTMLDivElement | null>}
+}) {
+	const colors = getAgentColorSet(agents, section.agentId)
+	const agent = section.agent
+	const label =
+		[agent?.description, agent?.name, agent?.subagentType].find((s) => s?.trim()) ??
+		section.agentId.slice(0, 12)
+
+	return (
+		<div className={`ml-3 pl-4 border rounded-xl py-4 pr-4 ${colors.bg} ${colors.border}`}>
+			{/* Subagent header */}
+			<div className="flex items-center gap-2 mb-4">
+				<span className="w-2 h-2 rounded-full flex-shrink-0" style={{backgroundColor: colors.dot}} />
+				<span className={`text-xs font-semibold uppercase tracking-wide ${colors.text}`}>{label}</span>
+			</div>
+
+			<div className="space-y-8">
+				{section.turns.map((turn) => (
+					<div
+						key={turn.id}
+						data-turn-id={turn.id}
+						ref={(el) => {
+							turnRefs.current.set(turn.id, el)
+						}}
+					>
+						<TurnView
+							turn={turn}
+							agents={agents}
+							allEvents={allEvents}
+							selectedEventId={selectedEventId}
+							onSelectEvent={onSelectEvent}
+							hideAgentLabel
+						/>
+					</div>
+				))}
+			</div>
+		</div>
+	)
+}
+
+// ---------------------------------------------------------------------------
 // Filtering logic
 // ---------------------------------------------------------------------------
 
@@ -1152,9 +1602,7 @@ function matchesFilters(event: Event, criteria: FilterCriteria): boolean {
 	if (criteria.agentFilter.size > 0 && !criteria.agentFilter.has(event.agentId ?? "")) return false
 	if (criteria.search) {
 		const q = criteria.search.toLowerCase()
-		const text = getEventSummary(event).toLowerCase()
-		const agent = (event.agentName ?? "").toLowerCase()
-		if (!text.includes(q) && !agent.includes(q) && !event.type.includes(q)) return false
+		if (!getEventSearchableText(event).includes(q)) return false
 	}
 	return true
 }
@@ -1176,6 +1624,7 @@ export function V10App() {
 	const [typeFilter, setTypeFilter] = useState<Set<EventType>>(new Set())
 	const [agentFilter, setAgentFilter] = useState<Set<string>>(new Set())
 	const [filterOpen, setFilterOpen] = useState(false)
+	const [searchOpen, setSearchOpen] = useState(false)
 	const [activeTurnId, setActiveTurnId] = useState<string | null>(null)
 	const [showOutline, setShowOutline] = useState(true)
 	const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
@@ -1202,7 +1651,13 @@ export function V10App() {
 		() =>
 			sessionData
 				? sessionData.allEvents.filter((e) =>
-						matchesFilters(e, {search, typeFilter, agentFilter, errorsOnly, failedToolUseIds}),
+						matchesFilters(e, {
+							search,
+							typeFilter,
+							agentFilter,
+							errorsOnly,
+							failedToolUseIds,
+						}),
 					)
 				: [],
 		[sessionData, search, typeFilter, agentFilter, errorsOnly, failedToolUseIds],
@@ -1216,6 +1671,33 @@ export function V10App() {
 	// Pinned event: scroll back to it after filter changes (#2)
 	const pinnedEventIdRef = useRef<string | null>(null)
 	const prevFilterKeyRef = useRef("")
+
+	// Pending scroll from search select: resolved after turns re-render.
+	// Tool events may not have data-event-id in DOM (accordions collapsed), so
+	// fall back to the containing turn element.
+	const pendingScrollToRef = useRef<string | null>(null)
+
+	// After turns update, try to scroll to the pending search-selected event.
+	// Falls back to the turn that owns the event when the specific element isn't
+	// in the DOM (e.g. tool events inside collapsed accordions, or tool-results
+	// which are excluded from timeline rendering).
+	useEffect(() => {
+		const eventId = pendingScrollToRef.current
+		if (!eventId) return
+		const eventEl = timelineRef.current?.querySelector(`[data-event-id="${eventId}"]`)
+		if (eventEl) {
+			eventEl.scrollIntoView({behavior: "smooth", block: "center"})
+			pendingScrollToRef.current = null
+			return
+		}
+		for (const turn of turns) {
+			if (turn.events.some((e) => e.id === eventId)) {
+				turnRefs.current.get(turn.id)?.scrollIntoView({behavior: "smooth", block: "start"})
+				pendingScrollToRef.current = null
+				break
+			}
+		}
+	}, [turns])
 
 	const filterKey = `${search}|${[...typeFilter].join(",")}|${[...agentFilter].join(",")}|${errorsOnly}`
 	if (prevFilterKeyRef.current !== filterKey) {
@@ -1240,11 +1722,19 @@ export function V10App() {
 		window.history.replaceState({}, "", newUrl)
 	}, [sessionPath])
 
-	// Escape closes filter drawer or deselects event
+	// Global keyboard shortcuts
 	useEffect(() => {
 		function handleKey(e: KeyboardEvent) {
-			if (e.key === "Escape") {
-				if (filterOpen) {
+			if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+				if (!sessionData) return
+				e.preventDefault()
+				setFilterOpen(false)
+				setSearchOpen(true)
+			} else if (e.key === "Escape") {
+				if (searchOpen) {
+					setSearchOpen(false)
+					e.preventDefault()
+				} else if (filterOpen) {
 					setFilterOpen(false)
 					e.preventDefault()
 				} else if (selectedEvent) {
@@ -1256,7 +1746,7 @@ export function V10App() {
 		}
 		document.addEventListener("keydown", handleKey)
 		return () => document.removeEventListener("keydown", handleKey)
-	}, [filterOpen, selectedEvent])
+	}, [sessionData, searchOpen, filterOpen, selectedEvent])
 
 	// Intersection observer to track active turn
 	useEffect(() => {
@@ -1299,6 +1789,20 @@ export function V10App() {
 		pinnedEventIdRef.current = event.id
 	}, [])
 
+	// Select from search modal: clear filters so the event is guaranteed visible,
+	// then use pendingScrollToRef so the post-turns-render effect can scroll —
+	// falling back to turn-level scroll for events not in the DOM (collapsed
+	// accordions, tool-results excluded from rendering).
+	const handleSearchSelect = useCallback((event: Event) => {
+		setSearch("")
+		setTypeFilter(new Set())
+		setAgentFilter(new Set())
+		setErrorsOnly(false)
+		setSelectedEvent(event)
+		pinnedEventIdRef.current = event.id
+		pendingScrollToRef.current = event.id
+	}, [])
+
 	const isFiltered = search || typeFilter.size > 0 || agentFilter.size > 0 || errorsOnly
 
 	return (
@@ -1335,6 +1839,28 @@ export function V10App() {
 						)}
 						<button
 							type="button"
+							onClick={() => setSearchOpen(true)}
+							className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800 transition-colors cursor-pointer text-xs"
+							title="Search events (⌘K)"
+						>
+							<svg
+								className="w-3.5 h-3.5"
+								fill="none"
+								viewBox="0 0 24 24"
+								stroke="currentColor"
+								aria-hidden="true"
+							>
+								<path
+									strokeLinecap="round"
+									strokeLinejoin="round"
+									strokeWidth={2}
+									d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+								/>
+							</svg>
+							<kbd className="font-mono">⌘K</kbd>
+						</button>
+						<button
+							type="button"
 							onClick={() => setShowOutline(!showOutline)}
 							className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
 								showOutline ? "bg-zinc-800 text-zinc-300" : "text-zinc-600 hover:text-zinc-400"
@@ -1358,7 +1884,10 @@ export function V10App() {
 						</button>
 						<button
 							type="button"
-							onClick={() => setFilterOpen(true)}
+							onClick={() => {
+								setSearchOpen(false)
+								setFilterOpen(true)
+							}}
 							className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
 								isFiltered ? "bg-zinc-800 text-amber-400" : "text-zinc-600 hover:text-zinc-400"
 							}`}
@@ -1436,23 +1965,39 @@ export function V10App() {
 							</div>
 
 							{/* Turns */}
-							{turns.map((turn) => (
-								<div
-									key={turn.id}
-									data-turn-id={turn.id}
-									ref={(el) => {
-										turnRefs.current.set(turn.id, el)
-									}}
-								>
-									<TurnView
-										turn={turn}
+							{groupTurnsIntoSections(turns, mainAgentId, agents).map((section) => {
+								if (section.kind === "main") {
+									const turn = section.turn
+									return (
+										<div
+											key={turn.id}
+											data-turn-id={turn.id}
+											ref={(el) => {
+												turnRefs.current.set(turn.id, el)
+											}}
+										>
+											<TurnView
+												turn={turn}
+												agents={agents}
+												allEvents={sessionData.allEvents}
+												selectedEventId={selectedEvent?.id ?? null}
+												onSelectEvent={handleSelectEvent}
+											/>
+										</div>
+									)
+								}
+								return (
+									<SubagentSectionView
+										key={`${section.agentId}-${section.turns[0]?.id}`}
+										section={section}
 										agents={agents}
 										allEvents={sessionData.allEvents}
 										selectedEventId={selectedEvent?.id ?? null}
 										onSelectEvent={handleSelectEvent}
+										turnRefs={turnRefs}
 									/>
-								</div>
-							))}
+								)
+							})}
 
 							<div className="h-32" />
 						</div>
@@ -1482,6 +2027,16 @@ export function V10App() {
 				onErrorsOnlyChange={setErrorsOnly}
 				errorCount={errorCount}
 			/>
+
+			{/* Search modal (⌘K) */}
+			{searchOpen && sessionData && (
+				<SearchModal
+					events={sessionData.allEvents}
+					agents={agents}
+					onGoToTimeline={handleSearchSelect}
+					onClose={() => setSearchOpen(false)}
+				/>
+			)}
 		</div>
 	)
 }

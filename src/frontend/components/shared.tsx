@@ -61,15 +61,25 @@ export function createEmptyFilters(): FilterState {
 	}
 }
 
+function getEventSearchText(event: Event): string {
+	const parts = [getEventSummary(event), event.agentName || "", event.type]
+	const {data} = event
+	if (data.type === "tool-use") {
+		for (const value of Object.values(data.input)) {
+			if (typeof value === "string") parts.push(value)
+			else if (value != null) parts.push(JSON.stringify(value))
+		}
+	}
+	return parts.join(" ").toLowerCase()
+}
+
 function matchesTextAndTypeFilters(event: Event, filters: FilterState): boolean {
 	if (filters.eventTypes.size > 0 && !filters.eventTypes.has(event.type)) {
 		return false
 	}
 	if (filters.searchText) {
 		const text = filters.searchText.toLowerCase()
-		const summary = getEventSummary(event).toLowerCase()
-		const agentName = (event.agentName || "").toLowerCase()
-		if (!summary.includes(text) && !agentName.includes(text) && !event.type.includes(text)) {
+		if (!getEventSearchText(event).includes(text)) {
 			return false
 		}
 	}

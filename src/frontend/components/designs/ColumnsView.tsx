@@ -1,4 +1,4 @@
-import {useCallback, useEffect, useMemo, useState} from "react"
+import {useCallback, useEffect, useMemo, useRef, useState} from "react"
 import type {AgentNode, Event, EventType} from "#types"
 import {MarkdownContent} from "../MarkdownContent"
 import {
@@ -190,13 +190,46 @@ export function ColumnsView({
 	const [leftWidth, setLeftWidth] = useState(250)
 	const [rightWidth, setRightWidth] = useState(500)
 	const [viewedAgentId, setViewedAgentId] = useState<string | null>(() => agents[0]?.id ?? null)
+	// Maps childAgentId -> toolUseId in the parent that was clicked to drill in
+	const [returnAnchors, setReturnAnchors] = useState<Map<string, string>>(new Map())
+	const [scrollToId, setScrollToId] = useState<string | null>(null)
+	const centerPanelRef = useRef<HTMLDivElement>(null)
 
-	// Reset viewed agent when agents change (new session loaded)
+	// Reset viewed agent and return anchors when agents change (new session loaded)
 	useEffect(() => {
 		if (agents.length > 0 && !agents.find((a) => a.id === viewedAgentId)) {
 			setViewedAgentId(agents[0]?.id ?? null)
+			setReturnAnchors(new Map())
 		}
 	}, [agents, viewedAgentId])
+
+	// Scroll to anchored item after agent navigation
+	useEffect(() => {
+		if (!scrollToId || !centerPanelRef.current) return
+		const el = centerPanelRef.current.querySelector(`[data-item-id="${scrollToId}"]`)
+		if (el) el.scrollIntoView({behavior: "smooth", block: "center"})
+		setScrollToId(null)
+	}, [scrollToId])
+
+	const handleDrillIn = useCallback((childAgentId: string, toolUseId: string) => {
+		setReturnAnchors((prev) => new Map(prev).set(childAgentId, toolUseId))
+		setViewedAgentId(childAgentId)
+	}, [])
+
+	const handleNavigateToAgent = useCallback(
+		(targetAgentId: string) => {
+			// Find the immediate child of the target that is on the path to the current agent.
+			// returnAnchors is keyed by child agent id, so for any ancestor jump we need
+			// the child-on-path (one step below target in the breadcrumb) as the key.
+			const currentPath = getAgentBreadcrumb(agents, viewedAgentId ?? "")
+			const targetIdx = currentPath.findIndex((n) => n.id === targetAgentId)
+			const childOnPath = targetIdx >= 0 ? currentPath[targetIdx + 1] : undefined
+			const anchor = childOnPath ? returnAnchors.get(childOnPath.id) : undefined
+			setViewedAgentId(targetAgentId)
+			if (anchor) setScrollToId(anchor)
+		},
+		[returnAnchors, viewedAgentId, agents],
+	)
 
 	const handleSelectEvent = useCallback(
 		(event: Event | null) => {
@@ -327,10 +360,29 @@ export function ColumnsView({
 			</div>
 
 			{/* Center panel: event stream */}
-			<div className="flex-1 overflow-y-auto min-w-0">
+			<div ref={centerPanelRef} className="flex-1 overflow-y-auto min-w-0">
 				{/* Breadcrumb navigation */}
 				{!isMainAgent && (
 					<div className="sticky top-0 z-10 bg-gray-900/95 backdrop-blur-sm border-b border-gray-800 px-4 py-2.5 flex items-center gap-1.5 text-sm">
+						{/* Back button */}
+						<button
+							type="button"
+							onClick={() => handleNavigateToAgent(breadcrumb.at(-2)?.id ?? agents[0]?.id ?? "")}
+							className="mr-1 text-gray-400 hover:text-gray-200 transition-colors flex items-center gap-1"
+						>
+							<svg
+								aria-hidden="true"
+								className="w-3.5 h-3.5"
+								fill="none"
+								viewBox="0 0 24 24"
+								strokeWidth={2.5}
+								stroke="currentColor"
+							>
+								<path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+							</svg>
+							Back
+						</button>
+						<span className="text-gray-700 mr-1">|</span>
 						{breadcrumb.map((node, i) => {
 							const isLast = i === breadcrumb.length - 1
 							const color = getAgentColor(agents, node.id)
@@ -345,7 +397,7 @@ export function ColumnsView({
 									) : (
 										<button
 											type="button"
-											onClick={() => setViewedAgentId(node.id)}
+											onClick={() => handleNavigateToAgent(node.id)}
 											className="text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1.5"
 										>
 											<span className="inline-block w-2 h-2 rounded-full" style={{backgroundColor: color}} />
@@ -367,6 +419,7 @@ export function ColumnsView({
 								return (
 									<MessageRow
 										key={item.event.id}
+										itemId={item.event.id}
 										event={item.event}
 										agents={agents}
 										isSelected={selectedEvent?.id === item.event.id}
@@ -378,6 +431,7 @@ export function ColumnsView({
 								return (
 									<ToolPairRow
 										key={item.toolUse.id}
+										itemId={item.toolUse.id}
 										toolUse={item.toolUse}
 										toolResult={item.toolResult}
 										failed={item.failed}
@@ -390,9 +444,10 @@ export function ColumnsView({
 							return (
 								<AgentTaskCard
 									key={item.toolUse.id}
+									itemId={item.toolUse.id}
 									item={item}
 									agents={agents}
-									onDrillIn={() => setViewedAgentId(item.agent.id)}
+									onDrillIn={() => handleDrillIn(item.agent.id, item.toolUse.id)}
 								/>
 							)
 						})}
@@ -461,11 +516,13 @@ function getAgentDepth(agents: AgentNode[], agentId: string): number {
 }
 
 function MessageRow({
+	itemId,
 	event,
 	agents,
 	isSelected,
 	onSelect,
 }: {
+	itemId: string
 	event: Event
 	agents: AgentNode[]
 	isSelected: boolean
@@ -475,6 +532,7 @@ function MessageRow({
 	return (
 		<button
 			type="button"
+			data-item-id={itemId}
 			onClick={() => onSelect(isSelected ? null : event)}
 			className={`w-full text-left px-4 py-3 border-b border-gray-800/50 transition-colors ${
 				isSelected ? "bg-blue-900/20" : "hover:bg-gray-800/50"
@@ -495,6 +553,7 @@ function MessageRow({
 }
 
 function ToolPairRow({
+	itemId,
 	toolUse,
 	toolResult,
 	failed,
@@ -502,6 +561,7 @@ function ToolPairRow({
 	selectedEventId,
 	onSelect,
 }: {
+	itemId: string
 	toolUse: Event
 	toolResult: Event | null
 	failed: boolean
@@ -522,6 +582,7 @@ function ToolPairRow({
 
 	return (
 		<div
+			data-item-id={itemId}
 			className={`border-b border-gray-800/50 transition-colors ${
 				isSelected ? "bg-blue-900/20" : "hover:bg-gray-800/30"
 			} ${failed ? "border-l-2 border-l-red-500/70" : ""}`}
@@ -569,10 +630,12 @@ function ToolPairRow({
 }
 
 function AgentTaskCard({
+	itemId,
 	item,
 	agents,
 	onDrillIn,
 }: {
+	itemId: string
 	item: Extract<DisplayItem, {kind: "agent-task"}>
 	agents: AgentNode[]
 	onDrillIn: () => void
@@ -588,7 +651,7 @@ function AgentTaskCard({
 	const success = resultData?.success ?? true
 
 	return (
-		<div className="border-b border-gray-800/50">
+		<div data-item-id={itemId} className="border-b border-gray-800/50">
 			<div
 				className="mx-3 my-2 rounded-lg border overflow-hidden transition-colors hover:border-gray-600"
 				style={{borderColor: `${agentColor}40`}}

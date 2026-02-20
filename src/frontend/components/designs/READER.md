@@ -74,7 +74,7 @@ When the user clicks an event, its ID is "pinned". If the user then changes filt
 
 A slide-out filter drawer (triggered from the header) provides:
 
-- **Text search** — matches against event summaries and agent names
+- **Text search** — matches against event summaries, agent names, event types, and tool input values (bash commands, file paths, grep patterns, etc.)
 - **Event type toggles** — buttons for each event type, with active count indicators
 - **Agent selection** — colored buttons for each agent, active count
 - **Errors only toggle** — when enabled, shows only failed tool-result events and their linked tool-use events. Also available as a red-tinted button in the header bar for quick access.
@@ -89,9 +89,28 @@ Failed tool calls are visually prominent throughout:
 - **In standalone tool results**: Red accent border and dot indicator
 - **In the errors-only filter**: One-click to see all failures in the session, with a count badge
 
+### Search modal (⌘K)
+
+Pressing `⌘K` (or `Ctrl+K`) opens a full-text search modal over all events in the session. A search button in the header also triggers it.
+
+The modal contains:
+- A text input (auto-focused) that searches event summaries, agent names, event types, and — for tool-use events — all tool input values (e.g. bash commands, file paths, grep patterns)
+- A results table with columns: **time** | **event type** | **match** (the event summary)
+- A footer with result count and keyboard hint
+
+Keyboard interaction within the modal:
+- `↑` / `↓`: navigate the result list
+- `↵`: select the highlighted result
+- `Escape`: close the modal
+
+Selecting a result clears any active filters, opens the event in the detail panel, and scrolls the timeline to that event.
+
+Results are capped at 300 to maintain responsiveness.
+
 ### Keyboard interaction
 
-- **Escape**: Closes the detail panel, filter drawer, or session picker (in that priority order)
+- **⌘K / Ctrl+K**: Open search modal
+- **Escape**: Closes the search modal, filter drawer, or detail panel (in that priority order)
 
 ## Props
 
