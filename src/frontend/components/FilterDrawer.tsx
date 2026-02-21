@@ -1,8 +1,8 @@
 import type {AgentNode, EventType} from "#types"
-import {useHotkeys} from "react-hotkeys-hook"
 import {useFilterStore} from "../stores/filter-store"
 import {getAgentColorSet} from "./session-view/agent-colors"
 import {EVENT_TYPES} from "./session-view/helpers"
+import {Sheet, SheetContent} from "./ui/sheet"
 
 export function FilterDrawer({
 	open,
@@ -15,10 +15,18 @@ export function FilterDrawer({
 	agents: AgentNode[]
 	errorCount: number
 }) {
-	const {search, typeInclude, typeExclude, agentFilter, errorsOnly, setSearch, setTypeInclude, setTypeExclude, setAgentFilter, setErrorsOnly} =
-		useFilterStore()
-
-	useHotkeys("escape", onClose, {enabled: open, enableOnFormTags: true})
+	const {
+		search,
+		typeInclude,
+		typeExclude,
+		agentFilter,
+		errorsOnly,
+		setSearch,
+		setTypeInclude,
+		setTypeExclude,
+		setAgentFilter,
+		setErrorsOnly,
+	} = useFilterStore()
 
 	const toggleAgent = (id: string) => {
 		const next = new Set(agentFilter)
@@ -37,17 +45,18 @@ export function FilterDrawer({
 		summary: "Summaries",
 	}
 
-	if (!open) return null
-
 	return (
-		<>
-			<button
-				type="button"
-				className="fixed inset-0 bg-black/40 z-40 cursor-default"
-				onClick={onClose}
-				aria-label="Close filters"
-			/>
-			<div className="fixed top-0 right-0 bottom-0 w-80 bg-zinc-900 border-l border-zinc-700 z-50 flex flex-col shadow-2xl">
+		<Sheet
+			open={open}
+			onOpenChange={(v) => {
+				if (!v) onClose()
+			}}
+		>
+			<SheetContent
+				side="right"
+				showCloseButton={false}
+				className="w-80 bg-zinc-900 border-l border-zinc-700 p-0 flex flex-col gap-0"
+			>
 				<div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
 					<span className="text-sm font-semibold text-zinc-200">Filters</span>
 					<button
@@ -232,7 +241,7 @@ export function FilterDrawer({
 						</div>
 					)}
 				</div>
-			</div>
-		</>
+			</SheetContent>
+		</Sheet>
 	)
 }

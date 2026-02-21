@@ -7,7 +7,11 @@
 		"noEmit": true,
 		"moduleResolution": "bundler",
 		"verbatimModuleSyntax": true,
-		"noUncheckedIndexedAccess": true
+		"noUncheckedIndexedAccess": true,
+		"baseUrl": ".",
+		"paths": {
+			"@/*": ["./src/*"]
+		}
 	},
 	"include": ["src/**/*"],
 	"exclude": ["dist", "node_modules"]

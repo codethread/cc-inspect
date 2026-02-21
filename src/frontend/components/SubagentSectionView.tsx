@@ -2,6 +2,7 @@ import type {AgentNode, Event} from "#types"
 import {getAgentColorSet} from "./session-view/agent-colors"
 import type {SubagentSection} from "./session-view/types"
 import {TurnView} from "./TurnView"
+import {TurnWrapper} from "./TurnWrapper"
 
 export function SubagentSectionView({
 	section,
@@ -9,7 +10,7 @@ export function SubagentSectionView({
 	allEvents,
 	selectedEventId,
 	onSelectEvent,
-	turnRefs,
+	onTurnVisible,
 	defaultToolsExpanded = true,
 }: {
 	section: SubagentSection
@@ -17,7 +18,7 @@ export function SubagentSectionView({
 	allEvents: Event[]
 	selectedEventId: string | null
 	onSelectEvent: (event: Event) => void
-	turnRefs: {current: Map<string, HTMLDivElement | null>}
+	onTurnVisible: (id: string) => void
 	defaultToolsExpanded?: boolean
 }) {
 	const colors = getAgentColorSet(agents, section.agentId)
@@ -36,13 +37,7 @@ export function SubagentSectionView({
 
 			<div className="space-y-8">
 				{section.turns.map((turn) => (
-					<div
-						key={turn.id}
-						data-turn-id={turn.id}
-						ref={(el) => {
-							turnRefs.current.set(turn.id, el)
-						}}
-					>
+					<TurnWrapper key={turn.id} turnId={turn.id} onVisible={onTurnVisible}>
 						<TurnView
 							turn={turn}
 							agents={agents}
@@ -52,7 +47,7 @@ export function SubagentSectionView({
 							hideAgentLabel
 							defaultToolsExpanded={defaultToolsExpanded}
 						/>
-					</div>
+					</TurnWrapper>
 				))}
 			</div>
 		</div>

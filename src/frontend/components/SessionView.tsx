@@ -1,11 +1,11 @@
+import {useQueryState} from "nuqs"
 import {useCallback, useEffect, useMemo, useRef} from "react"
 import {useHotkeys} from "react-hotkeys-hook"
 import type {Event} from "#types"
 import {useCliSession, useSessionData} from "../api"
-import {SCOPES, formatHotkey, useKeybindingsStore} from "../stores/keybindings-store"
 import {useFilterStore} from "../stores/filter-store"
+import {formatHotkey, SCOPES, useKeybindingsStore} from "../stores/keybindings-store"
 import {useSelectionStore} from "../stores/selection-store"
-import {useSessionStore} from "../stores/session-store"
 import {useUIStore} from "../stores/ui-store"
 import {DetailPanel} from "./DetailPanel"
 import {FilterDrawer} from "./FilterDrawer"
@@ -18,6 +18,7 @@ import {matchesFilters} from "./session-view/filtering"
 import {groupIntoTurns, groupTurnsIntoSections} from "./session-view/grouping"
 import {formatDateTime} from "./session-view/helpers"
 import {TurnView} from "./TurnView"
+import {TurnWrapper} from "./TurnWrapper"
 
 function collectAgents(node: import("#types").AgentNode): import("#types").AgentNode[] {
 	const result: import("#types").AgentNode[] = [node]
@@ -26,8 +27,7 @@ function collectAgents(node: import("#types").AgentNode): import("#types").Agent
 }
 
 export function SessionView() {
-	const sessionPath = useSessionStore((s) => s.sessionPath)
-	const setSessionPath = useSessionStore((s) => s.setSessionPath)
+	const [sessionPath, setSessionPath] = useQueryState("session", {defaultValue: ""})
 
 	const {
 		filterOpen,
@@ -88,7 +88,6 @@ export function SessionView() {
 
 	const turns = useMemo(() => groupIntoTurns(filteredEvents, mainAgentId), [filteredEvents, mainAgentId])
 
-	const turnRefs = useRef<Map<string, HTMLDivElement | null>>(new Map())
 	const timelineRef = useRef<HTMLElement | null>(null)
 
 	const pinnedEventIdRef = useRef<string | null>(null)
@@ -110,7 +109,9 @@ export function SessionView() {
 		}
 		for (const turn of turns) {
 			if (turn.events.some((e) => e.id === eventId)) {
-				turnRefs.current.get(turn.id)?.scrollIntoView({behavior: "smooth", block: "start"})
+				timelineRef.current
+					?.querySelector(`[data-turn-id="${turn.id}"]`)
+					?.scrollIntoView({behavior: "smooth", block: "start"})
 				pendingScrollToRef.current = null
 				break
 			}
@@ -130,14 +131,6 @@ export function SessionView() {
 			})
 		}
 	}
-
-	useEffect(() => {
-		const params = new URLSearchParams(window.location.search)
-		if (sessionPath) params.set("session", sessionPath)
-		else params.delete("session")
-		const newUrl = `${window.location.pathname}${params.toString() ? `?${params}` : ""}`
-		window.history.replaceState({}, "", newUrl)
-	}, [sessionPath])
 
 	// -------------------------------------------------------------------------
 	// Keyboard shortcuts (global scope — disabled when a modal overlay is open)
@@ -196,33 +189,12 @@ export function SessionView() {
 		[searchOpen, filterOpen, selectedEvent],
 	)
 
-	useEffect(() => {
-		const _turnCount = turns.length
-		if (_turnCount === 0) return
-
-		const observer = new IntersectionObserver(
-			(entries) => {
-				for (const entry of entries) {
-					if (entry.isIntersecting) {
-						setActiveTurnId(entry.target.getAttribute("data-turn-id"))
-					}
-				}
-			},
-			{rootMargin: "-80px 0px -60% 0px", threshold: 0},
-		)
-		for (const [, el] of turnRefs.current) {
-			if (el) observer.observe(el)
-		}
-		return () => observer.disconnect()
-	}, [turns, setActiveTurnId])
-
 	const handleNavigate = useCallback(
 		(turnId: string) => {
-			const el = turnRefs.current.get(turnId)
-			if (el) {
-				el.scrollIntoView({behavior: "smooth", block: "start"})
-				setActiveTurnId(turnId)
-			}
+			timelineRef.current
+				?.querySelector(`[data-turn-id="${turnId}"]`)
+				?.scrollIntoView({behavior: "smooth", block: "start"})
+			setActiveTurnId(turnId)
 		},
 		[setActiveTurnId],
 	)
@@ -395,13 +367,7 @@ export function SessionView() {
 					className="p-1.5 rounded-lg text-zinc-600 hover:text-zinc-400 transition-colors cursor-pointer"
 					title="Keyboard shortcuts"
 				>
-					<svg
-						className="w-4 h-4"
-						fill="none"
-						viewBox="0 0 24 24"
-						stroke="currentColor"
-						aria-hidden="true"
-					>
+					<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
 						<path
 							strokeLinecap="round"
 							strokeLinejoin="round"
@@ -465,13 +431,7 @@ export function SessionView() {
 								if (section.kind === "main") {
 									const turn = section.turn
 									return (
-										<div
-											key={turn.id}
-											data-turn-id={turn.id}
-											ref={(el) => {
-												turnRefs.current.set(turn.id, el)
-											}}
-										>
+										<TurnWrapper key={turn.id} turnId={turn.id} onVisible={setActiveTurnId}>
 											<TurnView
 												turn={turn}
 												agents={agents}
@@ -480,7 +440,7 @@ export function SessionView() {
 												onSelectEvent={handleSelectEvent}
 												defaultToolsExpanded={allToolsExpanded}
 											/>
-										</div>
+										</TurnWrapper>
 									)
 								}
 								return (
@@ -491,7 +451,7 @@ export function SessionView() {
 										allEvents={sessionData.allEvents}
 										selectedEventId={selectedEvent?.id ?? null}
 										onSelectEvent={handleSelectEvent}
-										turnRefs={turnRefs}
+										onTurnVisible={setActiveTurnId}
 										defaultToolsExpanded={allToolsExpanded}
 									/>
 								)

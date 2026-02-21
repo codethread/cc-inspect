@@ -24,10 +24,18 @@
   "dependencies": {
     "@tanstack/react-query": "^5.90.21",
     "bun-plugin-tailwind": "^0.0.15",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "cmdk": "^1.1.1",
+    "lucide-react": "^0.575.0",
     "markdown-to-jsx": "^8.0.0",
+    "nuqs": "^2.8.8",
+    "radix-ui": "^1.4.3",
     "react": "^19",
     "react-dom": "^19",
     "react-hotkeys-hook": "^5.2.4",
+    "react-intersection-observer": "^10.0.3",
+    "tailwind-merge": "^3.5.0",
     "tailwindcss": "^4.1.11",
     "zod": "^4.1.12",
     "zustand": "^5.0.11"
