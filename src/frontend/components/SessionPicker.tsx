@@ -1,19 +1,20 @@
-import {useEffect, useRef, useState} from "react"
+import {useEffect, useRef} from "react"
 import type {SessionData, SessionHandle} from "#types"
+import {useHotkeys} from "react-hotkeys-hook"
 import {useDirectories, useSessions} from "../api"
+import {usePickerStore} from "../stores/picker-store"
+import {useSessionStore} from "../stores/session-store"
 import {formatProjectName} from "./session-view/helpers"
 
 export function SessionPicker({
 	sessionData,
-	sessionPath,
 	onSelect,
 }: {
 	sessionData: SessionData | null
-	sessionPath: string
 	onSelect: (path: string) => void
 }) {
-	const [open, setOpen] = useState(false)
-	const [dir, setDir] = useState("")
+	const sessionPath = useSessionStore((s) => s.sessionPath)
+	const {open, dir, setOpen, setDir} = usePickerStore()
 	const {data: directories = []} = useDirectories()
 	const {data: sessions = [], isLoading} = useSessions(dir)
 	const ref = useRef<HTMLDivElement>(null)
@@ -23,23 +24,18 @@ export function SessionPicker({
 			const match = directories.find((d) => sessionPath.includes(d))
 			if (match) setDir(match)
 		}
-	}, [sessionPath, directories, dir])
+	}, [sessionPath, directories, dir, setDir])
+
+	useHotkeys("escape", () => setOpen(false), {enabled: open})
 
 	useEffect(() => {
 		if (!open) return
 		function handleClick(e: MouseEvent) {
 			if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
 		}
-		function handleKey(e: KeyboardEvent) {
-			if (e.key === "Escape") setOpen(false)
-		}
 		document.addEventListener("mousedown", handleClick)
-		document.addEventListener("keydown", handleKey)
-		return () => {
-			document.removeEventListener("mousedown", handleClick)
-			document.removeEventListener("keydown", handleKey)
-		}
-	}, [open])
+		return () => document.removeEventListener("mousedown", handleClick)
+	}, [open, setOpen])
 
 	return (
 		<div ref={ref} className="relative">

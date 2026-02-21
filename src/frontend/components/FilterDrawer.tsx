@@ -1,5 +1,6 @@
-import {useEffect} from "react"
 import type {AgentNode, EventType} from "#types"
+import {useHotkeys} from "react-hotkeys-hook"
+import {useFilterStore} from "../stores/filter-store"
 import {getAgentColorSet} from "./session-view/agent-colors"
 import {EVENT_TYPES} from "./session-view/helpers"
 
@@ -7,47 +8,23 @@ export function FilterDrawer({
 	open,
 	onClose,
 	agents,
-	search,
-	onSearchChange,
-	typeInclude,
-	typeExclude,
-	onTypeIncludeChange,
-	onTypeExcludeChange,
-	agentFilter,
-	onAgentFilterChange,
-	errorsOnly,
-	onErrorsOnlyChange,
 	errorCount,
 }: {
 	open: boolean
 	onClose: () => void
 	agents: AgentNode[]
-	search: string
-	onSearchChange: (s: string) => void
-	typeInclude: Set<EventType>
-	typeExclude: Set<EventType>
-	onTypeIncludeChange: (s: Set<EventType>) => void
-	onTypeExcludeChange: (s: Set<EventType>) => void
-	agentFilter: Set<string>
-	onAgentFilterChange: (s: Set<string>) => void
-	errorsOnly: boolean
-	onErrorsOnlyChange: (v: boolean) => void
 	errorCount: number
 }) {
-	useEffect(() => {
-		if (!open) return
-		function handleKey(e: KeyboardEvent) {
-			if (e.key === "Escape") onClose()
-		}
-		document.addEventListener("keydown", handleKey)
-		return () => document.removeEventListener("keydown", handleKey)
-	}, [open, onClose])
+	const {search, typeInclude, typeExclude, agentFilter, errorsOnly, setSearch, setTypeInclude, setTypeExclude, setAgentFilter, setErrorsOnly} =
+		useFilterStore()
+
+	useHotkeys("escape", onClose, {enabled: open, enableOnFormTags: true})
 
 	const toggleAgent = (id: string) => {
 		const next = new Set(agentFilter)
 		if (next.has(id)) next.delete(id)
 		else next.add(id)
-		onAgentFilterChange(next)
+		setAgentFilter(next)
 	}
 
 	const typeLabels: Record<EventType, string> = {
@@ -89,7 +66,7 @@ export function FilterDrawer({
 						<input
 							type="text"
 							value={search}
-							onChange={(e) => onSearchChange(e.target.value)}
+							onChange={(e) => setSearch(e.target.value)}
 							placeholder="Filter by text..."
 							className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-500 transition-colors"
 						/>
@@ -100,7 +77,7 @@ export function FilterDrawer({
 							<span className="block text-xs font-medium text-zinc-400 mb-2">Errors</span>
 							<button
 								type="button"
-								onClick={() => onErrorsOnlyChange(!errorsOnly)}
+								onClick={() => setErrorsOnly(!errorsOnly)}
 								className={`w-full text-left px-3 py-2 rounded-lg text-sm flex items-center gap-2 transition-colors cursor-pointer ${
 									errorsOnly
 										? "bg-red-500/10 text-red-400 border border-red-500/25"
@@ -120,8 +97,8 @@ export function FilterDrawer({
 								<button
 									type="button"
 									onClick={() => {
-										onTypeIncludeChange(new Set())
-										onTypeExcludeChange(new Set())
+										setTypeInclude(new Set())
+										setTypeExclude(new Set())
 									}}
 									className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors cursor-pointer"
 								>
@@ -155,9 +132,9 @@ export function FilterDrawer({
 													next.add(t)
 													const ex = new Set(typeExclude)
 													ex.delete(t)
-													onTypeExcludeChange(ex)
+													setTypeExclude(ex)
 												}
-												onTypeIncludeChange(next)
+												setTypeInclude(next)
 											}}
 											className={`p-1 rounded transition-colors cursor-pointer ${
 												isIncluded ? "text-blue-400 hover:text-blue-300" : "text-zinc-600 hover:text-zinc-400"
@@ -195,9 +172,9 @@ export function FilterDrawer({
 													next.add(t)
 													const inc = new Set(typeInclude)
 													inc.delete(t)
-													onTypeIncludeChange(inc)
+													setTypeInclude(inc)
 												}
-												onTypeExcludeChange(next)
+												setTypeExclude(next)
 											}}
 											className={`p-1 rounded transition-colors cursor-pointer ${
 												isExcluded ? "text-zinc-400 hover:text-zinc-300" : "text-zinc-600 hover:text-zinc-400"

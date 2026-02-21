@@ -1,6 +1,8 @@
 import {QueryClient, QueryClientProvider} from "@tanstack/react-query"
+import {HotkeysProvider} from "react-hotkeys-hook"
 import {createRoot} from "react-dom/client"
 import {App} from "./App"
+import {INITIAL_ACTIVE_SCOPES} from "./stores/keybindings-store"
 
 const queryClient = new QueryClient({
 	defaultOptions: {
@@ -15,9 +17,11 @@ function start() {
 	// biome-ignore lint/style/noNonNullAssertion: root or die
 	const root = createRoot(document.getElementById("root")!)
 	root.render(
-		<QueryClientProvider client={queryClient}>
-			<App />
-		</QueryClientProvider>,
+		<HotkeysProvider initiallyActiveScopes={INITIAL_ACTIVE_SCOPES}>
+			<QueryClientProvider client={queryClient}>
+				<App />
+			</QueryClientProvider>
+		</HotkeysProvider>,
 	)
 }
 

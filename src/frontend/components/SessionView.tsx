@@ -1,8 +1,15 @@
-import {useCallback, useEffect, useMemo, useRef, useState} from "react"
-import type {Event, EventType} from "#types"
+import {useCallback, useEffect, useMemo, useRef} from "react"
+import {useHotkeys} from "react-hotkeys-hook"
+import type {Event} from "#types"
 import {useCliSession, useSessionData} from "../api"
+import {SCOPES, formatHotkey, useKeybindingsStore} from "../stores/keybindings-store"
+import {useFilterStore} from "../stores/filter-store"
+import {useSelectionStore} from "../stores/selection-store"
+import {useSessionStore} from "../stores/session-store"
+import {useUIStore} from "../stores/ui-store"
 import {DetailPanel} from "./DetailPanel"
 import {FilterDrawer} from "./FilterDrawer"
+import {KeyboardShortcutsModal} from "./KeyboardShortcutsModal"
 import {Outline} from "./Outline"
 import {SearchModal} from "./SearchModal"
 import {SessionPicker} from "./SessionPicker"
@@ -19,25 +26,32 @@ function collectAgents(node: import("#types").AgentNode): import("#types").Agent
 }
 
 export function SessionView() {
-	const [sessionPath, setSessionPath] = useState(() => {
-		const params = new URLSearchParams(window.location.search)
-		return params.get("session") ?? ""
-	})
+	const sessionPath = useSessionStore((s) => s.sessionPath)
+	const setSessionPath = useSessionStore((s) => s.setSessionPath)
+
+	const {
+		filterOpen,
+		searchOpen,
+		shortcutsOpen,
+		showOutline,
+		allToolsExpanded,
+		setFilterOpen,
+		setSearchOpen,
+		setShortcutsOpen,
+		setShowOutline,
+		setAllToolsExpanded,
+	} = useUIStore()
+
+	const {search, typeInclude, typeExclude, agentFilter, errorsOnly, clearFilters} = useFilterStore()
+	const setErrorsOnly = useFilterStore((s) => s.setErrorsOnly)
+
+	const {selectedEvent, activeTurnId, setSelectedEvent, setActiveTurnId} = useSelectionStore()
+
+	const getKeys = useKeybindingsStore((s) => s.getKeys)
+
 	const {data: sessionDataFromPath} = useSessionData(sessionPath)
 	const {data: cliSession} = useCliSession()
 	const sessionData = sessionPath ? (sessionDataFromPath ?? null) : (cliSession ?? null)
-
-	const [search, setSearch] = useState("")
-	const [typeInclude, setTypeInclude] = useState<Set<EventType>>(new Set())
-	const [typeExclude, setTypeExclude] = useState<Set<EventType>>(new Set())
-	const [agentFilter, setAgentFilter] = useState<Set<string>>(new Set())
-	const [filterOpen, setFilterOpen] = useState(false)
-	const [searchOpen, setSearchOpen] = useState(false)
-	const [activeTurnId, setActiveTurnId] = useState<string | null>(null)
-	const [showOutline, setShowOutline] = useState(true)
-	const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
-	const [errorsOnly, setErrorsOnly] = useState(false)
-	const [allToolsExpanded, setAllToolsExpanded] = useState(true)
 
 	const agents = useMemo(() => (sessionData ? collectAgents(sessionData.mainAgent) : []), [sessionData])
 	const mainAgentId = sessionData?.mainAgent.id ?? ""
@@ -125,30 +139,62 @@ export function SessionView() {
 		window.history.replaceState({}, "", newUrl)
 	}, [sessionPath])
 
-	useEffect(() => {
-		function handleKey(e: KeyboardEvent) {
-			if ((e.metaKey || e.ctrlKey) && e.key === "k") {
-				if (!sessionData) return
+	// -------------------------------------------------------------------------
+	// Keyboard shortcuts (global scope — disabled when a modal overlay is open)
+	// -------------------------------------------------------------------------
+
+	useHotkeys(
+		getKeys("search.open"),
+		() => {
+			setFilterOpen(false)
+			setSearchOpen(true)
+		},
+		{enabled: !!sessionData, scopes: [SCOPES.GLOBAL], preventDefault: true},
+	)
+
+	useHotkeys(
+		getKeys("outline.toggle"),
+		() => setShowOutline(!showOutline),
+		{enabled: !!sessionData, scopes: [SCOPES.GLOBAL], preventDefault: true},
+		[showOutline],
+	)
+
+	useHotkeys(
+		getKeys("filter.open"),
+		() => {
+			setSearchOpen(false)
+			setFilterOpen(true)
+		},
+		{enabled: !!sessionData, scopes: [SCOPES.GLOBAL], preventDefault: true},
+	)
+
+	useHotkeys(
+		getKeys("tools.toggle"),
+		() => setAllToolsExpanded(!allToolsExpanded),
+		{enabled: !!sessionData, scopes: [SCOPES.GLOBAL], preventDefault: true},
+		[allToolsExpanded],
+	)
+
+	// Escape: dismiss in priority order — search modal → filter drawer → selection
+	// Not in scopes (uses enabled instead) so it works regardless of active scope
+	useHotkeys(
+		"escape",
+		(e) => {
+			if (searchOpen) {
+				setSearchOpen(false)
 				e.preventDefault()
+			} else if (filterOpen) {
 				setFilterOpen(false)
-				setSearchOpen(true)
-			} else if (e.key === "Escape") {
-				if (searchOpen) {
-					setSearchOpen(false)
-					e.preventDefault()
-				} else if (filterOpen) {
-					setFilterOpen(false)
-					e.preventDefault()
-				} else if (selectedEvent) {
-					setSelectedEvent(null)
-					pinnedEventIdRef.current = null
-					e.preventDefault()
-				}
+				e.preventDefault()
+			} else if (selectedEvent) {
+				setSelectedEvent(null)
+				pinnedEventIdRef.current = null
+				e.preventDefault()
 			}
-		}
-		document.addEventListener("keydown", handleKey)
-		return () => document.removeEventListener("keydown", handleKey)
-	}, [sessionData, searchOpen, filterOpen, selectedEvent])
+		},
+		{enabled: searchOpen || filterOpen || !!selectedEvent, enableOnFormTags: true},
+		[searchOpen, filterOpen, selectedEvent],
+	)
 
 	useEffect(() => {
 		const _turnCount = turns.length
@@ -168,42 +214,50 @@ export function SessionView() {
 			if (el) observer.observe(el)
 		}
 		return () => observer.disconnect()
-	}, [turns])
+	}, [turns, setActiveTurnId])
 
-	const handleNavigate = useCallback((turnId: string) => {
-		const el = turnRefs.current.get(turnId)
-		if (el) {
-			el.scrollIntoView({behavior: "smooth", block: "start"})
-			setActiveTurnId(turnId)
-		}
-	}, [])
+	const handleNavigate = useCallback(
+		(turnId: string) => {
+			const el = turnRefs.current.get(turnId)
+			if (el) {
+				el.scrollIntoView({behavior: "smooth", block: "start"})
+				setActiveTurnId(turnId)
+			}
+		},
+		[setActiveTurnId],
+	)
 
-	const handleSelectSession = useCallback((path: string) => {
-		setSessionPath(path)
-		setActiveTurnId(null)
-		setSelectedEvent(null)
-		pinnedEventIdRef.current = null
-	}, [])
+	const handleSelectSession = useCallback(
+		(path: string) => {
+			setSessionPath(path)
+			setActiveTurnId(null)
+			setSelectedEvent(null)
+			pinnedEventIdRef.current = null
+		},
+		[setSessionPath, setActiveTurnId, setSelectedEvent],
+	)
 
-	const handleSelectEvent = useCallback((event: Event) => {
-		setSelectedEvent(event)
-		pinnedEventIdRef.current = event.id
-	}, [])
+	const handleSelectEvent = useCallback(
+		(event: Event) => {
+			setSelectedEvent(event)
+			pinnedEventIdRef.current = event.id
+		},
+		[setSelectedEvent],
+	)
 
 	// Select from search modal: clear filters so the event is guaranteed visible,
 	// then use pendingScrollToRef so the post-turns-render effect can scroll —
 	// falling back to turn-level scroll for events not in the DOM (collapsed
 	// accordions, tool-results excluded from rendering).
-	const handleSearchSelect = useCallback((event: Event) => {
-		setSearch("")
-		setTypeInclude(new Set())
-		setTypeExclude(new Set())
-		setAgentFilter(new Set())
-		setErrorsOnly(false)
-		setSelectedEvent(event)
-		pinnedEventIdRef.current = event.id
-		pendingScrollToRef.current = event.id
-	}, [])
+	const handleSearchSelect = useCallback(
+		(event: Event) => {
+			clearFilters()
+			setSelectedEvent(event)
+			pinnedEventIdRef.current = event.id
+			pendingScrollToRef.current = event.id
+		},
+		[clearFilters, setSelectedEvent],
+	)
 
 	const isFiltered =
 		search || typeInclude.size > 0 || typeExclude.size > 0 || agentFilter.size > 0 || errorsOnly
@@ -213,7 +267,7 @@ export function SessionView() {
 			{/* Header */}
 			<header className="flex items-center gap-4 px-6 py-3 bg-zinc-900/80 border-b border-zinc-800 flex-shrink-0 backdrop-blur-sm">
 				<span className="text-sm font-semibold text-zinc-100 tracking-tight">cc-inspect</span>
-				<SessionPicker sessionData={sessionData} sessionPath={sessionPath} onSelect={handleSelectSession} />
+				<SessionPicker sessionData={sessionData} onSelect={handleSelectSession} />
 
 				<div className="flex-1" />
 
@@ -242,7 +296,7 @@ export function SessionView() {
 							type="button"
 							onClick={() => setSearchOpen(true)}
 							className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800 transition-colors cursor-pointer text-xs"
-							title="Search events (⌘K)"
+							title={`Search events (${formatHotkey(getKeys("search.open"))})`}
 						>
 							<svg
 								className="w-3.5 h-3.5"
@@ -258,7 +312,7 @@ export function SessionView() {
 									d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
 								/>
 							</svg>
-							<kbd className="font-mono">⌘K</kbd>
+							<kbd className="font-mono">{formatHotkey(getKeys("search.open"))}</kbd>
 						</button>
 						<button
 							type="button"
@@ -266,7 +320,7 @@ export function SessionView() {
 							className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
 								allToolsExpanded ? "text-zinc-600 hover:text-zinc-400" : "bg-zinc-800 text-zinc-300"
 							}`}
-							title={allToolsExpanded ? "Collapse all tool calls" : "Expand all tool calls"}
+							title={`${allToolsExpanded ? "Collapse" : "Expand"} all tool calls (${formatHotkey(getKeys("tools.toggle"))})`}
 						>
 							<svg
 								className="w-4 h-4"
@@ -288,7 +342,7 @@ export function SessionView() {
 							className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
 								showOutline ? "bg-zinc-800 text-zinc-300" : "text-zinc-600 hover:text-zinc-400"
 							}`}
-							title="Toggle outline"
+							title={`Toggle outline (${formatHotkey(getKeys("outline.toggle"))})`}
 						>
 							<svg
 								className="w-4 h-4"
@@ -314,7 +368,7 @@ export function SessionView() {
 							className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
 								isFiltered ? "bg-zinc-800 text-amber-400" : "text-zinc-600 hover:text-zinc-400"
 							}`}
-							title="Filters"
+							title={`Filters (${formatHotkey(getKeys("filter.open"))})`}
 						>
 							<svg
 								className="w-4 h-4"
@@ -333,6 +387,29 @@ export function SessionView() {
 						</button>
 					</>
 				)}
+
+				{/* Keyboard shortcuts config — always visible */}
+				<button
+					type="button"
+					onClick={() => setShortcutsOpen(true)}
+					className="p-1.5 rounded-lg text-zinc-600 hover:text-zinc-400 transition-colors cursor-pointer"
+					title="Keyboard shortcuts"
+				>
+					<svg
+						className="w-4 h-4"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke="currentColor"
+						aria-hidden="true"
+					>
+						<path
+							strokeLinecap="round"
+							strokeLinejoin="round"
+							strokeWidth={1.5}
+							d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"
+						/>
+					</svg>
+				</button>
 			</header>
 
 			{/* Body: [outline] [timeline] [detail panel] */}
@@ -438,20 +515,10 @@ export function SessionView() {
 				open={filterOpen}
 				onClose={() => setFilterOpen(false)}
 				agents={agents}
-				search={search}
-				onSearchChange={setSearch}
-				typeInclude={typeInclude}
-				typeExclude={typeExclude}
-				onTypeIncludeChange={setTypeInclude}
-				onTypeExcludeChange={setTypeExclude}
-				agentFilter={agentFilter}
-				onAgentFilterChange={setAgentFilter}
-				errorsOnly={errorsOnly}
-				onErrorsOnlyChange={setErrorsOnly}
 				errorCount={errorCount}
 			/>
 
-			{/* Search modal (⌘K) */}
+			{/* Search modal (configurable shortcut) */}
 			{searchOpen && sessionData && (
 				<SearchModal
 					events={sessionData.allEvents}
@@ -460,6 +527,9 @@ export function SessionView() {
 					onClose={() => setSearchOpen(false)}
 				/>
 			)}
+
+			{/* Keyboard shortcuts config modal */}
+			{shortcutsOpen && <KeyboardShortcutsModal onClose={() => setShortcutsOpen(false)} />}
 		</div>
 	)
 }

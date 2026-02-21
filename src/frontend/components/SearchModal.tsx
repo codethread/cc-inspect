@@ -1,5 +1,8 @@
-import {useEffect, useMemo, useRef, useState} from "react"
+import {useEffect, useMemo, useRef} from "react"
 import type {AgentNode, Event, EventType} from "#types"
+import {useHotkeys, useHotkeysContext} from "react-hotkeys-hook"
+import {SCOPES} from "../stores/keybindings-store"
+import {useSearchModalStore} from "../stores/search-modal-store"
 import {DetailPanel} from "./DetailPanel"
 import {getAgentColorSet} from "./session-view/agent-colors"
 import {
@@ -22,11 +25,21 @@ export function SearchModal({
 	onGoToTimeline: (event: Event) => void
 	onClose: () => void
 }) {
-	const [query, setQuery] = useState("")
-	const [selectedIndex, setSelectedIndex] = useState(0)
-	const [typeFilter, setTypeFilter] = useState<Set<EventType>>(new Set())
+	const {query, selectedIndex, typeFilter, setQuery, setSelectedIndex, setTypeFilter, reset} =
+		useSearchModalStore()
 	const inputRef = useRef<HTMLInputElement>(null)
 	const listRef = useRef<HTMLDivElement>(null)
+	const {enableScope, disableScope} = useHotkeysContext()
+
+	// Switch to MODAL scope while open so global shortcuts don't fire
+	useEffect(() => {
+		enableScope(SCOPES.MODAL)
+		disableScope(SCOPES.GLOBAL)
+		return () => {
+			disableScope(SCOPES.MODAL)
+			enableScope(SCOPES.GLOBAL)
+		}
+	}, [enableScope, disableScope])
 
 	const toggleType = (type: EventType) => {
 		const next = new Set(typeFilter)
@@ -53,6 +66,11 @@ export function SearchModal({
 		inputRef.current?.focus()
 	}, [])
 
+	// Reset modal state on open so stale query/index don't persist
+	useEffect(() => {
+		reset()
+	}, [reset])
+
 	useEffect(() => {
 		const list = listRef.current
 		if (!list) return
@@ -60,25 +78,39 @@ export function SearchModal({
 		el?.scrollIntoView({block: "nearest"})
 	}, [boundedIndex])
 
-	useEffect(() => {
-		function handleKey(e: KeyboardEvent) {
-			if (e.key === "Escape") {
-				onClose()
-			} else if (e.key === "ArrowDown") {
-				e.preventDefault()
-				setSelectedIndex((i) => Math.min(i + 1, results.length - 1))
-			} else if (e.key === "ArrowUp") {
-				e.preventDefault()
-				setSelectedIndex((i) => Math.max(i - 1, 0))
-			} else if (e.key === "Enter" && previewEvent) {
-				e.preventDefault()
-				onGoToTimeline(previewEvent)
-				onClose()
-			}
-		}
-		document.addEventListener("keydown", handleKey)
-		return () => document.removeEventListener("keydown", handleKey)
-	}, [results, previewEvent, onGoToTimeline, onClose])
+	useHotkeys("escape", onClose, {scopes: [SCOPES.MODAL], enableOnFormTags: true})
+
+	useHotkeys(
+		"arrowdown",
+		(e) => {
+			e.preventDefault()
+			setSelectedIndex(Math.min(selectedIndex + 1, results.length - 1))
+		},
+		{scopes: [SCOPES.MODAL], enableOnFormTags: true},
+		[selectedIndex, results.length],
+	)
+
+	useHotkeys(
+		"arrowup",
+		(e) => {
+			e.preventDefault()
+			setSelectedIndex(Math.max(selectedIndex - 1, 0))
+		},
+		{scopes: [SCOPES.MODAL], enableOnFormTags: true},
+		[selectedIndex],
+	)
+
+	useHotkeys(
+		"enter",
+		(e) => {
+			if (!previewEvent) return
+			e.preventDefault()
+			onGoToTimeline(previewEvent)
+			onClose()
+		},
+		{scopes: [SCOPES.MODAL], enableOnFormTags: true},
+		[previewEvent, onGoToTimeline, onClose],
+	)
 
 	return (
 		<>

@@ -10,7 +10,7 @@ Three-column layout filling the viewport:
 2. **Timeline** (center, flexible, max-width ~768px centered) — Grouped event stream with progressive disclosure
 3. **Detail panel** (right, 450px, always visible) — Full event details for the selected event
 
-A compact header bar at the top contains the session picker, event count, outline toggle, error filter toggle, search button, tool-collapse toggle, and filter drawer trigger.
+A compact header bar at the top contains the session picker, event count, outline toggle, error filter toggle, search button, tool-collapse toggle, filter drawer trigger, and keyboard shortcuts config button.
 
 ## File structure
 
@@ -25,6 +25,7 @@ src/frontend/components/
   TurnView.tsx              — turn renderer with all event block types
   ToolGroupAccordion.tsx    — collapsible tool call group accordion
   SubagentSectionView.tsx   — bordered subagent section wrapper
+  KeyboardShortcutsModal.tsx — configurable keybindings UI (recording + localStorage persist)
   session-view/
     types.ts                — Turn, ToolCallGroup, TurnSection interfaces
     helpers.ts              — format utils, getEventSummary, EVENT_TYPES, EVENT_TYPE_LABEL/COLOR
@@ -136,8 +137,31 @@ Results are capped at 300 to maintain responsiveness.
 
 ### Keyboard shortcuts
 
-- **⌘K / Ctrl+K**: Open search modal
-- **Escape**: Closes the search modal, filter drawer, or detail panel (in that priority order)
+Default bindings (all configurable except Escape):
+
+| Action | Default | Description |
+|--------|---------|-------------|
+| Open search | `⌘K` | Open the full-text event search modal |
+| Toggle outline | `⌘⇧O` | Show or hide the left outline sidebar |
+| Open filters | `⌘⇧F` | Open the filter drawer |
+| Toggle tool calls | `⌘⇧T` | Collapse or expand all tool call groups |
+| Escape | *(not configurable)* | Close the search modal, filter drawer, or dismiss the selected event (in that priority order) |
+
+All configurable bindings have their current shortcut reflected in the tooltip of the corresponding header button.
+
+### Keyboard shortcut configuration
+
+A keyboard icon button at the far right of the header opens a **Keyboard shortcuts** modal listing all configurable bindings. Each row shows the action label, description, and the current key combination as a clickable button.
+
+**Recording a new shortcut:**
+1. Click the shortcut button for any action — it enters recording mode showing "Press keys…"
+2. Press the desired key combination (e.g. `⌘⇧P`)
+3. The live display updates as keys are detected
+4. Click **Save** to apply the new binding (or **Cancel** to discard)
+
+**Resetting:** A **Reset** link appears next to any customised binding. **Reset all** in the modal header reverts everything to defaults.
+
+Custom bindings are persisted in `localStorage` under the key `cc-inspect-keybindings`, so they survive page reloads.
 
 ## Props
 

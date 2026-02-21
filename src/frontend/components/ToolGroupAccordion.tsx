@@ -1,5 +1,6 @@
-import {useEffect, useState} from "react"
+import {useEffect} from "react"
 import type {Event} from "#types"
+import {useAccordionStore} from "../stores/accordion-store"
 import {formatTime, getEventSummary} from "./session-view/helpers"
 import type {ToolCallGroup} from "./session-view/types"
 
@@ -16,11 +17,14 @@ export function ToolGroupAccordion({
 	onSelectEvent: (event: Event) => void
 	defaultExpanded?: boolean
 }) {
-	const [expanded, setExpanded] = useState(defaultExpanded)
+	// Use the first event's ID as a stable key for this accordion instance
+	const accordionId = group.events[0]?.id ?? ""
+	const {expanded: allExpanded, setExpanded, resetAll} = useAccordionStore()
+	const expanded = allExpanded.get(accordionId) ?? defaultExpanded
 
 	useEffect(() => {
-		setExpanded(defaultExpanded)
-	}, [defaultExpanded])
+		resetAll(defaultExpanded)
+	}, [defaultExpanded, resetAll])
 
 	const summaryText =
 		group.toolNames.length <= 3
@@ -42,7 +46,7 @@ export function ToolGroupAccordion({
 		>
 			<button
 				type="button"
-				onClick={() => setExpanded(!expanded)}
+				onClick={() => setExpanded(accordionId, !expanded)}
 				className={`w-full flex items-center gap-3 px-4 py-2.5 hover:bg-zinc-800/50 transition-colors cursor-pointer text-left ${
 					hasFailures ? "bg-red-500/5" : "bg-zinc-900/50"
 				}`}
