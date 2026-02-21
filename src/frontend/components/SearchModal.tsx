@@ -26,6 +26,7 @@ export function SearchModal({
 }) {
 	const [typeFilter, setTypeFilter] = useState<Set<EventType>>(new Set())
 	const [query, setQuery] = useState("")
+	const [selectedId, setSelectedId] = useState("")
 	const [previewEvent, setPreviewEvent] = useState<Event | null>(null)
 
 	const toggleType = (type: EventType) => {
@@ -55,16 +56,18 @@ export function SearchModal({
 		>
 			<DialogContent
 				showCloseButton={false}
-				className="p-0 gap-0 bg-zinc-900 border-zinc-700 rounded-2xl shadow-2xl w-[1000px] max-w-[calc(100vw-1rem)] top-[10%] translate-y-0 overflow-hidden"
-				style={{maxHeight: "78vh"}}
+				className="p-0 gap-0 bg-zinc-900 border-zinc-700 rounded-2xl top-[10%] translate-y-0 overflow-hidden"
+				style={{width: "min(1000px, calc(100vw - 1rem))", maxWidth: "none", height: "78vh"}}
 			>
 				{/* Two-panel layout */}
-				<div className="flex overflow-hidden h-full" style={{maxHeight: "78vh"}}>
+				<div className="flex overflow-hidden h-full">
 					{/* Left panel: search + results */}
 					<div className="w-80 flex-shrink-0 flex flex-col border-r border-zinc-800">
 						<Command
 							filter={() => 1}
+							value={selectedId}
 							onValueChange={(id) => {
+								setSelectedId(id)
 								setPreviewEvent(events.find((e) => e.id === id) ?? null)
 							}}
 							className="bg-transparent rounded-none h-full flex flex-col"
