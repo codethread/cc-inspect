@@ -2,10 +2,10 @@ import {useEffect, useState} from "react"
 import {useHotkeys, useHotkeysContext, useRecordHotkeys} from "react-hotkeys-hook"
 import {
 	CONFIGURABLE_BINDINGS,
-	SCOPES,
 	formatHotkey,
 	formatRecordedKeys,
 	recordedKeysToBinding,
+	SCOPES,
 	useKeybindingsStore,
 } from "../stores/keybindings-store"
 
@@ -75,7 +75,13 @@ export function KeyboardShortcutsModal({onClose}: {onClose: () => void}) {
 							onClick={onClose}
 							className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition-colors cursor-pointer"
 						>
-							<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+							<svg
+								className="w-4 h-4"
+								fill="none"
+								viewBox="0 0 24 24"
+								stroke="currentColor"
+								aria-hidden="true"
+							>
 								<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
 							</svg>
 						</button>
@@ -89,11 +95,7 @@ export function KeyboardShortcutsModal({onClose}: {onClose: () => void}) {
 						const isCustomized = !!customKeys[binding.id]
 						const isEditing = editingId === binding.id
 						const liveDisplay =
-							isEditing && isRecording
-								? keys.size > 0
-									? formatRecordedKeys(keys)
-									: "Press keys…"
-								: null
+							isEditing && isRecording ? (keys.size > 0 ? formatRecordedKeys(keys) : "Press keys…") : null
 
 						return (
 							<div key={binding.id} className="flex items-center gap-4 px-5 py-3.5">

@@ -72,8 +72,7 @@ export const useKeybindingsStore = create<KeybindingsState>()(
 		(set, get) => ({
 			customKeys: {},
 			getKeys: (id) => get().customKeys[id] ?? DEFAULT_BINDINGS[id]?.defaultKeys ?? "",
-			updateBinding: (id, keys) =>
-				set((state) => ({customKeys: {...state.customKeys, [id]: keys}})),
+			updateBinding: (id, keys) => set((state) => ({customKeys: {...state.customKeys, [id]: keys}})),
 			resetBinding: (id) =>
 				set((state) => {
 					// biome-ignore lint/correctness/noUnusedVariables: destructure to omit id
