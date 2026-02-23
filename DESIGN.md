@@ -6,9 +6,9 @@ Structured document reader with conversational turn grouping, hierarchical outli
 
 Three-column layout filling the viewport:
 
-1. **Outline sidebar** (left, ~240px, toggleable) — Hierarchical navigation showing user messages and agent interactions as an indented outline
+1. **Outline sidebar** (left, toggleable, resizable) — Hierarchical navigation showing user messages and agent interactions as an indented outline
 2. **Timeline** (center, flexible, max-width ~768px centered) — Grouped event stream with progressive disclosure
-3. **Detail panel** (right, 450px, always visible) — Full event details for the selected event
+3. **Detail panel** (right, always visible, resizable) — Full event details for the selected event
 
 A compact header bar at the top contains the session picker, event count, outline toggle, error filter toggle, search button, tool-collapse toggle, filter drawer trigger, and keyboard shortcuts config button.
 
@@ -99,6 +99,21 @@ The right panel is always present:
   - For tool-use events: automatically shows the linked tool-result below
   - For tool-result events: shows the linked tool-use input above
   - Escape key to dismiss (returns to placeholder)
+
+### Resizable side panels
+
+The outline and detail side panels have draggable vertical resize handles:
+
+- Dragging a handle sets a **fixed width** for that panel at the current viewport breakpoint.
+- Breakpoints are `small`, `medium`, and `large`, based on viewport width.
+- Each breakpoint keeps its own saved widths for both panels in `localStorage` under `cc-inspect-panel-sizes`.
+- On first use (or when no saved width is available), each panel starts at a breakpoint-specific default size.
+- If a breakpoint has no saved width, resolution uses fallback order:
+  - check the current breakpoint first
+  - then check the next **lower** breakpoint
+  - then wrap around to the remaining breakpoint
+  - Example: at `medium`, fallback order is `medium → small → large`.
+- Saved widths are clamped to panel-specific min/max bounds per breakpoint before being applied.
 
 ### Scroll position memory
 

@@ -1,5 +1,6 @@
 import {useQueryState} from "nuqs"
-import {useCallback, useEffect, useMemo, useRef} from "react"
+import {useCallback, useEffect, useMemo, useRef, useState} from "react"
+import type {PointerEvent as ReactPointerEvent} from "react"
 import {useHotkeys} from "react-hotkeys-hook"
 import type {Event} from "#types"
 import {useCliSession, useSessionData} from "../api"
@@ -15,6 +16,17 @@ import {SearchModal} from "./SearchModal"
 import {SessionPicker} from "./SessionPicker"
 import {SubagentSectionView} from "./SubagentSectionView"
 import {matchesFilters} from "./session-view/filtering"
+import {
+	clampPanelSize,
+	getPanelBreakpoint,
+	loadPanelSizesFromStorage,
+	resolvePanelSize,
+	savePanelSizesToStorage,
+	type PanelBreakpoint,
+	type PanelId,
+	type PersistedPanelSizes,
+	updatePanelSizeForBreakpoint,
+} from "./session-view/panel-sizing"
 import {groupIntoTurns, groupTurnsIntoSections} from "./session-view/grouping"
 import {formatDateTime} from "./session-view/helpers"
 import {TurnView} from "./TurnView"
@@ -24,6 +36,15 @@ function collectAgents(node: import("#types").AgentNode): import("#types").Agent
 	const result: import("#types").AgentNode[] = [node]
 	for (const child of node.children) result.push(...collectAgents(child))
 	return result
+}
+
+interface PanelResizeState {
+	panel: PanelId
+	breakpoint: PanelBreakpoint
+	startX: number
+	startWidth: number
+	previewWidth: number
+	hasMoved: boolean
 }
 
 export function SessionView() {
@@ -94,6 +115,152 @@ export function SessionView() {
 	const pinnedEventIdRef = useRef<string | null>(null)
 	const prevFilterKeyRef = useRef("")
 	const pendingScrollToRef = useRef<string | null>(null)
+	const activePanelResizeRef = useRef<PanelResizeState | null>(null)
+	const outlinePanelRef = useRef<HTMLElement | null>(null)
+	const detailPanelRef = useRef<HTMLElement | null>(null)
+	const panelWidthRafRef = useRef<number | null>(null)
+	const pendingPanelWidthRef = useRef<{panel: PanelId; width: number} | null>(null)
+
+	const [viewportWidth, setViewportWidth] = useState(typeof window === "undefined" ? 1600 : window.innerWidth)
+	const [isPanelResizing, setIsPanelResizing] = useState(false)
+	const [savedPanelSizes, setSavedPanelSizes] = useState<PersistedPanelSizes>(() =>
+		loadPanelSizesFromStorage(typeof window === "undefined" ? null : window.localStorage),
+	)
+
+	const activePanelBreakpoint = useMemo(() => getPanelBreakpoint(viewportWidth), [viewportWidth])
+
+	const outlinePanelWidth = useMemo(
+		() =>
+			resolvePanelSize({
+				panel: "outline",
+				breakpoint: activePanelBreakpoint,
+				sizes: savedPanelSizes,
+			}),
+		[activePanelBreakpoint, savedPanelSizes],
+	)
+
+	const detailPanelWidth = useMemo(
+		() =>
+			resolvePanelSize({
+				panel: "detail",
+				breakpoint: activePanelBreakpoint,
+				sizes: savedPanelSizes,
+			}),
+		[activePanelBreakpoint, savedPanelSizes],
+	)
+
+	useEffect(() => {
+		if (typeof window === "undefined") return
+		const handleResize = () => setViewportWidth(window.innerWidth)
+		handleResize()
+		window.addEventListener("resize", handleResize)
+		return () => window.removeEventListener("resize", handleResize)
+	}, [])
+
+	useEffect(() => {
+		if (typeof window === "undefined") return
+		savePanelSizesToStorage({storage: window.localStorage, sizes: savedPanelSizes})
+	}, [savedPanelSizes])
+
+	const schedulePanelWidthPreview = useCallback((panel: PanelId, width: number) => {
+		pendingPanelWidthRef.current = {panel, width}
+		if (panelWidthRafRef.current !== null) return
+
+		panelWidthRafRef.current = window.requestAnimationFrame(() => {
+			panelWidthRafRef.current = null
+			const pendingWidth = pendingPanelWidthRef.current
+			if (!pendingWidth) return
+			const panelElement = pendingWidth.panel === "outline" ? outlinePanelRef.current : detailPanelRef.current
+			if (!panelElement) return
+			panelElement.style.width = `${pendingWidth.width}px`
+		})
+	}, [])
+
+	useEffect(() => {
+		return () => {
+			if (panelWidthRafRef.current !== null) {
+				window.cancelAnimationFrame(panelWidthRafRef.current)
+			}
+		}
+	}, [])
+
+	const handlePanelResizeStart = useCallback(
+		(panel: PanelId, event: ReactPointerEvent<HTMLElement>) => {
+			event.preventDefault()
+			const startWidth = panel === "outline" ? outlinePanelWidth : detailPanelWidth
+			activePanelResizeRef.current = {
+				panel,
+				breakpoint: activePanelBreakpoint,
+				startX: event.clientX,
+				startWidth,
+				previewWidth: startWidth,
+				hasMoved: false,
+			}
+			schedulePanelWidthPreview(panel, startWidth)
+			setIsPanelResizing(true)
+		},
+		[activePanelBreakpoint, detailPanelWidth, outlinePanelWidth, schedulePanelWidthPreview],
+	)
+
+	useEffect(() => {
+		if (!isPanelResizing) return
+
+		const handlePointerMove = (event: PointerEvent) => {
+			const activeResize = activePanelResizeRef.current
+			if (!activeResize) return
+
+			const deltaX = event.clientX - activeResize.startX
+			const nextSize =
+				activeResize.panel === "outline"
+					? activeResize.startWidth + deltaX
+					: activeResize.startWidth - deltaX
+			const clampedSize = clampPanelSize(activeResize.panel, activeResize.breakpoint, nextSize)
+			if (clampedSize === activeResize.previewWidth) return
+
+			activeResize.previewWidth = clampedSize
+			activeResize.hasMoved ||= clampedSize !== activeResize.startWidth
+			schedulePanelWidthPreview(activeResize.panel, clampedSize)
+		}
+
+		const stopResizing = () => {
+			const activeResize = activePanelResizeRef.current
+			if (!activeResize) return
+			if (activeResize.hasMoved) {
+				setSavedPanelSizes((current) =>
+					updatePanelSizeForBreakpoint({
+						breakpoint: activeResize.breakpoint,
+						panel: activeResize.panel,
+						size: activeResize.previewWidth,
+						sizes: current,
+					}),
+				)
+			}
+			activePanelResizeRef.current = null
+			setIsPanelResizing(false)
+		}
+
+		window.addEventListener("pointermove", handlePointerMove)
+		window.addEventListener("pointerup", stopResizing)
+		window.addEventListener("pointercancel", stopResizing)
+
+		return () => {
+			window.removeEventListener("pointermove", handlePointerMove)
+			window.removeEventListener("pointerup", stopResizing)
+			window.removeEventListener("pointercancel", stopResizing)
+		}
+	}, [isPanelResizing, schedulePanelWidthPreview])
+
+	useEffect(() => {
+		if (outlinePanelRef.current) {
+			outlinePanelRef.current.style.width = `${outlinePanelWidth}px`
+		}
+	}, [outlinePanelWidth])
+
+	useEffect(() => {
+		if (detailPanelRef.current) {
+			detailPanelRef.current.style.width = `${detailPanelWidth}px`
+		}
+	}, [detailPanelWidth])
 
 	// After turns update, try to scroll to the pending search-selected event.
 	// Falls back to the turn that owns the event when the specific element isn't
@@ -236,7 +403,7 @@ export function SessionView() {
 		search || typeInclude.size > 0 || typeExclude.size > 0 || agentFilter.size > 0 || errorsOnly
 
 	return (
-		<div className="h-screen flex flex-col bg-zinc-950 text-zinc-200">
+		<div className={`h-screen flex flex-col bg-zinc-950 text-zinc-200 ${isPanelResizing ? "select-none" : ""}`}>
 			{/* Header */}
 			<header className="flex items-center gap-4 px-6 py-3 bg-zinc-900/80 border-b border-zinc-800 flex-shrink-0 backdrop-blur-sm">
 				<span className="text-sm font-semibold text-zinc-100 tracking-tight">cc-inspect</span>
@@ -383,15 +550,27 @@ export function SessionView() {
 			<div className="flex-1 flex min-h-0">
 				{/* Outline sidebar */}
 				{sessionData && showOutline && (
-					<aside className="w-60 flex-shrink-0 overflow-y-auto border-r border-zinc-800/50 bg-zinc-950">
-						<Outline
-							turns={turns}
-							agents={agents}
-							mainAgentId={mainAgentId}
-							activeTurnId={activeTurnId}
-							onNavigate={handleNavigate}
+					<>
+						<aside
+							ref={outlinePanelRef}
+							style={{width: outlinePanelWidth}}
+							className="flex-shrink-0 overflow-y-auto border-r border-zinc-800/50 bg-zinc-950"
+						>
+							<Outline
+								turns={turns}
+								agents={agents}
+								mainAgentId={mainAgentId}
+								activeTurnId={activeTurnId}
+								onNavigate={handleNavigate}
+							/>
+						</aside>
+						<button
+							type="button"
+							aria-label="Resize outline panel"
+							onPointerDown={(event) => handlePanelResizeStart("outline", event)}
+							className="-ml-px w-3 flex-shrink-0 cursor-col-resize bg-transparent hover:bg-zinc-900/35 active:bg-zinc-800/45 transition-colors border-0 p-0 focus-visible:outline-none focus-visible:bg-zinc-800/50"
 						/>
-					</aside>
+					</>
 				)}
 
 				{/* Timeline (center) */}
@@ -465,14 +644,22 @@ export function SessionView() {
 
 				{/* Detail panel (always visible) */}
 				{sessionData && (
-					<aside className="w-[450px] flex-shrink-0 min-h-0">
-						<DetailPanel
-							event={selectedEvent}
-							allEvents={sessionData.allEvents}
-							agents={agents}
-							sessionFilePath={resolvedSessionFilePath}
+					<>
+						<button
+							type="button"
+							aria-label="Resize detail panel"
+							onPointerDown={(event) => handlePanelResizeStart("detail", event)}
+							className="-mr-px w-3 flex-shrink-0 cursor-col-resize bg-transparent hover:bg-zinc-900/35 active:bg-zinc-800/45 transition-colors border-0 p-0 focus-visible:outline-none focus-visible:bg-zinc-800/50"
 						/>
-					</aside>
+						<aside ref={detailPanelRef} style={{width: detailPanelWidth}} className="flex-shrink-0 min-h-0">
+							<DetailPanel
+								event={selectedEvent}
+								allEvents={sessionData.allEvents}
+								agents={agents}
+								sessionFilePath={resolvedSessionFilePath}
+							/>
+						</aside>
+					</>
 				)}
 			</div>
 
