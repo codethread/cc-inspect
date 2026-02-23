@@ -52,6 +52,7 @@ export function SessionView() {
 	const {data: sessionDataFromPath} = useSessionData(sessionPath)
 	const {data: cliSession} = useCliSession()
 	const sessionData = sessionPath ? (sessionDataFromPath ?? null) : (cliSession ?? null)
+	const resolvedSessionFilePath = sessionPath || (sessionData ? `${sessionData.logDirectory}/${sessionData.sessionId}.jsonl` : null)
 
 	const agents = useMemo(() => (sessionData ? collectAgents(sessionData.mainAgent) : []), [sessionData])
 	const mainAgentId = sessionData?.mainAgent.id ?? ""
@@ -465,7 +466,12 @@ export function SessionView() {
 				{/* Detail panel (always visible) */}
 				{sessionData && (
 					<aside className="w-[450px] flex-shrink-0 min-h-0">
-						<DetailPanel event={selectedEvent} allEvents={sessionData.allEvents} agents={agents} />
+						<DetailPanel
+							event={selectedEvent}
+							allEvents={sessionData.allEvents}
+							agents={agents}
+							sessionFilePath={resolvedSessionFilePath}
+						/>
 					</aside>
 				)}
 			</div>
@@ -483,6 +489,7 @@ export function SessionView() {
 				<SearchModal
 					events={sessionData.allEvents}
 					agents={agents}
+					sessionFilePath={resolvedSessionFilePath}
 					onGoToTimeline={handleSearchSelect}
 					onClose={() => setSearchOpen(false)}
 				/>

@@ -92,6 +92,9 @@ The right panel is always present:
 - **When nothing is selected**: Shows a placeholder with instructions
 - **When an event is selected**: Shows full details including:
   - Event metadata (agent name, timestamp)
+  - Header `copy id` action for the selected event ID
+  - A help popover next to `copy id` with an event-specific `jq` command targeting the current session file, plus a copy action for that command
+  - Copy icons next to each displayed detail block (message markdown, tool JSON input, tool output, summaries, prompts, etc.) so each block can be copied independently
   - Full content rendered as markdown for messages, JSON for tool input, raw text for tool output
   - For tool-use events: automatically shows the linked tool-result below
   - For tool-result events: shows the linked tool-use input above

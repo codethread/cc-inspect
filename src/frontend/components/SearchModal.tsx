@@ -16,11 +16,13 @@ import {Dialog, DialogContent} from "./ui/dialog"
 export function SearchModal({
 	events,
 	agents,
+	sessionFilePath,
 	onGoToTimeline,
 	onClose,
 }: {
 	events: Event[]
 	agents: AgentNode[]
+	sessionFilePath: string | null
 	onGoToTimeline: (event: Event) => void
 	onClose: () => void
 }) {
@@ -204,6 +206,7 @@ export function SearchModal({
 								event={previewEvent}
 								allEvents={events}
 								agents={agents}
+								sessionFilePath={sessionFilePath}
 								onNavigate={() => {
 									onGoToTimeline(previewEvent)
 									onClose()
