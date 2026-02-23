@@ -1,0 +1,23 @@
+project_doc_fallback_filenames = ["CLAUDE.md"]
+
+developer_instructions = '''
+## Dev Server + Logs Runbook (`cc-inspect`)
+
+1. Kill any existing listener on `:5555` before starting:
+   `pid=$(lsof -nP -iTCP:5555 -sTCP:LISTEN -t); [ -n "$pid" ] && kill -TERM "$pid" || true`
+
+2. Start dev server in a PTY (do not use `nohup` or `&`; it exits for this app).
+   Use `exec_command` with:
+   - `cmd: "bun dev"`
+   - `workdir: "/Users/adamhall/dev/projects/cc-inspect"`
+   - `tty: true`
+
+3. Keep the returned `session_id`; that is the live terminal session.
+   Poll output with `write_stdin` using `chars: ""` to read new logs and hot-reload lines.
+
+4. From startup output, capture the JSONL log path (line starting with `log:`), then inspect it directly:
+   `wc -l <logfile>; head -n 20 <logfile>; tail -n 30 <logfile>`
+
+5. Expect hot reload lines (`Bundled page...`, `Reloaded...`) in PTY output, and structured runtime events in:
+   `/Users/adamhall/dev/projects/cc-inspect/.logs/*.jsonl`
+'''
