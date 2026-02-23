@@ -1,4 +1,5 @@
 import Markdown from "markdown-to-jsx"
+import type {ComponentPropsWithoutRef} from "react"
 
 interface MarkdownContentProps {
 	children: string
@@ -117,39 +118,47 @@ export function MarkdownContent({children, className = ""}: MarkdownContentProps
 						},
 					},
 					table: {
-						component: "table",
-						props: {
-							className: "min-w-full border border-gray-700 mb-3 text-sm",
-						},
+						component: ({children: tableChildren, ...tableProps}: ComponentPropsWithoutRef<"table">) => (
+							<div className="mb-3 overflow-x-auto rounded-lg border border-cyan-400/15 bg-zinc-950/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]">
+								<table
+									{...tableProps}
+									className={`min-w-full border-collapse text-sm ${tableProps.className ?? ""}`}
+								>
+									{tableChildren}
+								</table>
+							</div>
+						),
 					},
 					thead: {
 						component: "thead",
 						props: {
-							className: "bg-gray-800",
+							className: "bg-zinc-900/90",
 						},
 					},
 					tbody: {
 						component: "tbody",
 						props: {
-							className: "bg-gray-900",
+							className: "bg-zinc-950/70",
 						},
 					},
 					tr: {
 						component: "tr",
 						props: {
-							className: "border-b border-gray-700",
+							className:
+								"border-b border-zinc-800/90 even:bg-cyan-400/[0.03] hover:bg-cyan-300/[0.08] transition-colors",
 						},
 					},
 					th: {
 						component: "th",
 						props: {
-							className: "px-4 py-2 text-left font-semibold text-gray-200",
+							className:
+								"px-4 py-2.5 text-left font-semibold text-zinc-100 border-b border-cyan-400/15 tracking-wide",
 						},
 					},
 					td: {
 						component: "td",
 						props: {
-							className: "px-4 py-2 text-gray-300",
+							className: "px-4 py-2.5 text-zinc-300 border-b border-zinc-800/80 align-top",
 						},
 					},
 				},

@@ -114,6 +114,7 @@ The right panel is always present:
   - A help popover next to `copy id` with an event-specific `jq` command targeting the current session file, plus a copy action for that command
   - Copy icons next to each displayed detail block (message markdown, tool JSON input, tool output, summaries, prompts, etc.) so each block can be copied independently
   - Full content rendered as markdown for messages, JSON for tool input, raw text for tool output
+  - Markdown tables render in a dark neo-terminal style with subtle cyan accents, alternating row shading, and hover highlighting to match the timeline/detail visual language
   - For tool-use events: automatically shows the linked tool-result below
   - For tool-result events: shows the linked tool-use input above
   - Escape key to dismiss (returns to placeholder)
