@@ -1,10 +1,11 @@
 import {basename, dirname, join} from "node:path"
 import type {SessionDataResponse} from "#types"
 import {Claude, ParseError} from "../../lib/claude"
+import {LOG_MESSAGE, LOG_MODULE} from "../../lib/event-catalog"
 import {getServerLogger} from "../../lib/log/server-instance"
 import {isValidSessionPath} from "../utils"
 
-const log = () => getServerLogger("routes.session")
+const log = () => getServerLogger(LOG_MODULE.ROUTES_SESSION)
 
 export async function sessionHandler(req: Request, cliSessionPath?: string): Promise<Response> {
 	const url = new URL(req.url)
@@ -38,7 +39,7 @@ export async function sessionHandler(req: Request, cliSessionPath?: string): Pro
 		const claude = new Claude({path: dirname(projectDir)})
 
 		const sessionData = await log().timed(
-			"session parsed",
+			LOG_MESSAGE.ROUTE_SESSION_PARSED,
 			() =>
 				claude.parseSession({
 					id: sessionId,
@@ -48,7 +49,7 @@ export async function sessionHandler(req: Request, cliSessionPath?: string): Pro
 			{path: sessionPath},
 		)
 
-		log().info("session loaded", {
+		log().info(LOG_MESSAGE.ROUTE_SESSION_LOADED, {
 			events: sessionData.allEvents.length,
 			agents: sessionData.mainAgent.children.length + 1,
 		})
@@ -62,14 +63,14 @@ export async function sessionHandler(req: Request, cliSessionPath?: string): Pro
 		})
 	} catch (err) {
 		if (err instanceof ParseError) {
-			log().error("parse error", {
+			log().error(LOG_MESSAGE.ROUTE_SESSION_PARSE_ERROR, {
 				err: err.message,
 				stack: err.stack,
 				data: {rawLine: err.rawLine},
 			})
 		} else {
 			const message = err instanceof Error ? err.message : String(err)
-			log().error("failed to parse session", {
+			log().error(LOG_MESSAGE.ROUTE_SESSION_FAILED_TO_PARSE, {
 				err: message,
 				stack: err instanceof Error ? err.stack : undefined,
 			})

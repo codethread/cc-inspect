@@ -1,5 +1,6 @@
 import {useEffect} from "react"
 import type {Event} from "#types"
+import {SESSION_EVENT_TYPE} from "../../lib/event-catalog"
 import {useAccordionStore} from "../stores/accordion-store"
 import {formatTime, getEventSummary} from "./session-view/helpers"
 import type {ToolCallGroup} from "./session-view/types"
@@ -32,9 +33,9 @@ export function ToolGroupAccordion({
 			: `${group.toolNames.slice(0, 3).join(", ")} +${group.toolNames.length - 3}`
 
 	const failureCount = group.events.reduce((count, e) => {
-		if (e.data.type === "tool-use") {
+		if (e.data.type === SESSION_EVENT_TYPE.TOOL_USE) {
 			const result = toolResultMap.get(e.data.toolId)
-			if (result?.data.type === "tool-result" && !result.data.success) return count + 1
+			if (result?.data.type === SESSION_EVENT_TYPE.TOOL_RESULT && !result.data.success) return count + 1
 		}
 		return count
 	}, 0)
@@ -75,11 +76,12 @@ export function ToolGroupAccordion({
 			{expanded && (
 				<div className={`border-t ${hasFailures ? "border-red-500/20" : "border-zinc-800"}`}>
 					{group.events.map((event) => {
-						if (event.type === "tool-result") return null
+						if (event.type === SESSION_EVENT_TYPE.TOOL_RESULT) return null
 						const isActive = event.id === selectedEventId
 						const summary = getEventSummary(event)
-						const result = event.data.type === "tool-use" ? toolResultMap.get(event.data.toolId) : null
-						const success = result?.data.type === "tool-result" ? result.data.success : null
+						const result =
+							event.data.type === SESSION_EVENT_TYPE.TOOL_USE ? toolResultMap.get(event.data.toolId) : null
+						const success = result?.data.type === SESSION_EVENT_TYPE.TOOL_RESULT ? result.data.success : null
 						const isFailed = success === false
 
 						return (
@@ -97,7 +99,7 @@ export function ToolGroupAccordion({
 								<span
 									className={`font-mono text-xs font-medium flex-shrink-0 ${isFailed ? "text-red-400" : "text-amber-400"}`}
 								>
-									{event.data.type === "tool-use" ? event.data.toolName : "result"}
+									{event.data.type === SESSION_EVENT_TYPE.TOOL_USE ? event.data.toolName : "result"}
 								</span>
 								{success !== null && (
 									<span

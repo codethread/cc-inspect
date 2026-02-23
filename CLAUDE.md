@@ -8,31 +8,12 @@ cc-inspect is a web-based visualizer for Claude Code session logs. It parses `.j
 
 ## Common Commands
 
-### Development
-
 - `bun dev` - Start development server with hot reload on port 5555
 - `bun start` - Run without hot reload
-- `cc-inspect` - Run the globally linked CLI (after `npm link`)
-- `cc-inspect -s <path>` - Load a specific session file
-- `cc-inspect --help` - Show CLI help
-
-### Testing
-
+- `cc-inspect --help` - Run the globally linked CLI (after `npm link`)
 - `bun test` - Run test suite with Bun's built-in test runner
-
-### Code Quality
-
-- `bun run typecheck` - Type check with TypeScript
-- `bun run lint` - Lint with Biome
-- `bun run fmt` - Format code with Biome
-- `bun run check` - Run Biome checks (lint + format check)
 - `bun run fix` - Auto-fix issues with Biome (includes unsafe fixes)
 - `bun run verify` - Run all checks (typecheck + lint + format)
-
-### Installation
-
-- `bun install` - Install dependencies
-- `npm link` - Link the CLI globally for system-wide use
 
 ## Architecture
 
@@ -43,10 +24,10 @@ Self-contained SDK for parsing Claude Code `.jsonl` session logs. Designed for f
 **Public API** via the `Claude` class:
 
 ```ts
-const claude = new Claude({ path: '/absolute/path/to/projects/dir' })
-const projects: ProjectHandle[] = await claude.listProjects()
-const sessions: SessionHandle[] = await claude.listSessions(project)
-const sessionData: SessionData = await claude.parseSession(session)
+const claude = new Claude({ path: "/absolute/path/to/projects/dir" });
+const projects: ProjectHandle[] = await claude.listProjects();
+const sessions: SessionHandle[] = await claude.listSessions(project);
+const sessionData: SessionData = await claude.parseSession(session);
 ```
 
 **Files:**
@@ -78,6 +59,18 @@ CLI flags parsed with `util.parseArgs()`. `-s/--session` pre-validates via `clau
 ### Type System (src/types.ts)
 
 Re-exports all SDK types via `export * from "./lib/claude"` so the `#types` import alias continues to work. Also defines app-level API response schemas (DirectoriesResponseSchema, SessionsResponseSchema, SessionDataResponseSchema) as discriminated unions for the server↔frontend contract.
+
+### Event/Log Catalog (src/lib/event-catalog.ts)
+
+Single source of truth for:
+
+- Claude raw entry/content type names
+- Session event type names
+- Store keys, store action names, devtools/persist names
+- Client/server log module names
+- Canonical log message names
+
+When adding or changing logged events/actions/messages, update this file first and use its constants in code. For debugging with `jq`, prefer searching these catalog values instead of ad-hoc strings.
 
 ### Frontend (src/frontend/App.tsx, src/frontend/frontend.tsx)
 
@@ -121,6 +114,7 @@ The app uses TanStack Query (`@tanstack/react-query`) for data fetching, with qu
 - avoid index files and default exports, use named files and exports for clear usage patterns. Typescript namespaces are valid to group logical functions into a cohesive collection without the need for an object to hold them.
 - use inline interfaces for return types in most cases (or shared interfaces if applicable)
 - Frontend state rule: keep app/UI state in stores (`src/frontend/stores`) rather than component-local state. Persist only durable user preferences; keep session-specific state non-persistent.
+- this repo is Agent first, so all events should be logged to the development log file to allow debugging an introspection (log file is shown in `bun dev` output). Use `jq` and `rg` or Explore based subagents to obtain details.
 
 ## Test style
 

@@ -1,4 +1,5 @@
 import type {AgentNode, EventType} from "#types"
+import {SESSION_EVENT_TYPE} from "../../lib/event-catalog"
 import {useFilterStore} from "../stores/filter-store"
 import {getAgentColorSet} from "./session-view/agent-colors"
 import {EVENT_TYPES} from "./session-view/helpers"
@@ -36,13 +37,13 @@ export function FilterDrawer({
 	}
 
 	const typeLabels: Record<EventType, string> = {
-		"user-message": "User Messages",
-		"assistant-message": "Assistant Messages",
-		"tool-use": "Tool Calls",
-		"tool-result": "Tool Results",
-		thinking: "Thinking",
-		"agent-spawn": "Agent Spawns",
-		summary: "Summaries",
+		[SESSION_EVENT_TYPE.USER_MESSAGE]: "User Messages",
+		[SESSION_EVENT_TYPE.ASSISTANT_MESSAGE]: "Assistant Messages",
+		[SESSION_EVENT_TYPE.TOOL_USE]: "Tool Calls",
+		[SESSION_EVENT_TYPE.TOOL_RESULT]: "Tool Results",
+		[SESSION_EVENT_TYPE.THINKING]: "Thinking",
+		[SESSION_EVENT_TYPE.AGENT_SPAWN]: "Agent Spawns",
+		[SESSION_EVENT_TYPE.SUMMARY]: "Summaries",
 	}
 
 	return (

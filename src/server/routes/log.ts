@@ -1,7 +1,8 @@
+import {LOG_MESSAGE, LOG_MODULE} from "../../lib/event-catalog"
 import {LogEntrySchema} from "../../lib/log/types"
 import {getLogWriter, getServerLogger} from "../../lib/log/server-instance"
 
-const log = () => getServerLogger("routes.log")
+const log = () => getServerLogger(LOG_MODULE.ROUTES_LOG)
 
 // POST /api/log — beacon fallback for client log entries
 export async function logHandler(req: Request): Promise<Response> {
@@ -23,7 +24,7 @@ export async function logHandler(req: Request): Promise<Response> {
 
 		return new Response("ok", {status: 200})
 	} catch (err) {
-		log().error("failed to process beacon log", {
+		log().error(LOG_MESSAGE.ROUTE_LOG_BEACON_FAILED, {
 			err: err instanceof Error ? err.message : String(err),
 		})
 		return new Response("bad request", {status: 400})

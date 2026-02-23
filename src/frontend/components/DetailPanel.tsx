@@ -1,6 +1,7 @@
 import {useEffect, useMemo, useState} from "react"
 import {AlertCircleIcon, CheckIcon, CircleQuestionMarkIcon, CopyIcon} from "lucide-react"
 import type {AgentNode, Event} from "#types"
+import {SESSION_EVENT_TYPE} from "../../lib/event-catalog"
 import {MarkdownContent} from "./MarkdownContent"
 import {getAgentColorSet} from "./session-view/agent-colors"
 import {formatTime} from "./session-view/helpers"
@@ -67,19 +68,19 @@ export function DetailPanel({
 		key: null,
 	})
 
-	const toolId = event?.data.type === "tool-use" ? event.data.toolId : null
+	const toolId = event?.data.type === SESSION_EVENT_TYPE.TOOL_USE ? event.data.toolId : null
 	const linkedResult = toolId
-		? allEvents.find((e) => e.data.type === "tool-result" && e.data.toolUseId === toolId)
+		? allEvents.find((e) => e.data.type === SESSION_EVENT_TYPE.TOOL_RESULT && e.data.toolUseId === toolId)
 		: null
-	const toolUseId = event?.data.type === "tool-result" ? event.data.toolUseId : null
+	const toolUseId = event?.data.type === SESSION_EVENT_TYPE.TOOL_RESULT ? event.data.toolUseId : null
 	const linkedUse = toolUseId
-		? allEvents.find((e) => e.data.type === "tool-use" && e.data.toolId === toolUseId)
+		? allEvents.find((e) => e.data.type === SESSION_EVENT_TYPE.TOOL_USE && e.data.toolId === toolUseId)
 		: null
 
 	const toolUseInputText =
-		event?.data.type === "tool-use" ? JSON.stringify(event.data.input, null, 2) : undefined
+		event?.data.type === SESSION_EVENT_TYPE.TOOL_USE ? JSON.stringify(event.data.input, null, 2) : undefined
 	const linkedToolUseInputText =
-		linkedUse?.data.type === "tool-use" ? JSON.stringify(linkedUse.data.input, null, 2) : undefined
+		linkedUse?.data.type === SESSION_EVENT_TYPE.TOOL_USE ? JSON.stringify(linkedUse.data.input, null, 2) : undefined
 
 	const resolvedSessionFilePath = useMemo(() => {
 		if (sessionFilePath?.trim()) return sessionFilePath.trim()
@@ -231,7 +232,7 @@ export function DetailPanel({
 
 			{/* Content */}
 			<div className="flex-1 overflow-y-auto min-h-0">
-				{event.data.type === "user-message" && (
+				{event.data.type === SESSION_EVENT_TYPE.USER_MESSAGE && (
 					<div className="px-4 py-4">
 						<div className="flex items-center justify-between mb-3">
 							<div className="text-xs font-semibold text-sky-400 uppercase tracking-wider">User Message</div>
@@ -243,7 +244,7 @@ export function DetailPanel({
 					</div>
 				)}
 
-				{event.data.type === "assistant-message" && (
+				{event.data.type === SESSION_EVENT_TYPE.ASSISTANT_MESSAGE && (
 					<div className="px-4 py-4">
 						<div className="flex items-center justify-between mb-3">
 							<div className="text-xs font-semibold text-violet-400 uppercase tracking-wider">Assistant</div>
@@ -255,7 +256,7 @@ export function DetailPanel({
 					</div>
 				)}
 
-				{event.data.type === "thinking" && (
+				{event.data.type === SESSION_EVENT_TYPE.THINKING && (
 					<div className="px-4 py-4">
 						<div className="flex items-center justify-between mb-3">
 							<div className="text-xs font-semibold text-fuchsia-400 uppercase tracking-wider">Thinking</div>
@@ -267,7 +268,7 @@ export function DetailPanel({
 					</div>
 				)}
 
-				{event.data.type === "tool-use" && (
+				{event.data.type === SESSION_EVENT_TYPE.TOOL_USE && (
 					<div className="px-4 py-4">
 						<div className="flex items-center gap-2 mb-3">
 							<span className="text-xs font-semibold text-amber-400 uppercase tracking-wider">Tool Call</span>
@@ -286,7 +287,7 @@ export function DetailPanel({
 							{toolUseInputText}
 						</pre>
 
-						{linkedResult && linkedResult.data.type === "tool-result" && (
+						{linkedResult && linkedResult.data.type === SESSION_EVENT_TYPE.TOOL_RESULT && (
 							<>
 								<div className="flex items-center justify-between mb-1.5">
 									<div className="text-xs font-medium uppercase tracking-wider">
@@ -308,7 +309,7 @@ export function DetailPanel({
 					</div>
 				)}
 
-				{event.data.type === "tool-result" && (
+				{event.data.type === SESSION_EVENT_TYPE.TOOL_RESULT && (
 					<div className="px-4 py-4">
 						<div className="flex items-center gap-2 mb-3">
 							<span className="text-xs font-semibold uppercase tracking-wider">
@@ -318,7 +319,7 @@ export function DetailPanel({
 							</span>
 						</div>
 
-						{linkedUse && linkedUse.data.type === "tool-use" && (
+						{linkedUse && linkedUse.data.type === SESSION_EVENT_TYPE.TOOL_USE && (
 							<>
 								<div className="flex items-center justify-between mb-1.5">
 									<div className="text-xs font-medium text-zinc-500 uppercase tracking-wider">
@@ -348,7 +349,7 @@ export function DetailPanel({
 					</div>
 				)}
 
-				{event.data.type === "agent-spawn" && (
+				{event.data.type === SESSION_EVENT_TYPE.AGENT_SPAWN && (
 					<div className="px-4 py-4">
 						<div className="flex items-center justify-between mb-3">
 							<div className="text-xs font-semibold text-orange-400 uppercase tracking-wider">
@@ -372,7 +373,7 @@ export function DetailPanel({
 					</div>
 				)}
 
-				{event.data.type === "summary" && (
+				{event.data.type === SESSION_EVENT_TYPE.SUMMARY && (
 					<div className="px-4 py-4">
 						<div className="flex items-center justify-between mb-3">
 							<div className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Summary</div>

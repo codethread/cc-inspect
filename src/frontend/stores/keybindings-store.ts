@@ -1,5 +1,7 @@
 import {create} from "zustand"
-import {persist} from "zustand/middleware"
+import {devtools, persist} from "zustand/middleware"
+import {STORE_ACTION, STORE_DEVTOOLS_NAME, STORE_KEY, STORE_PERSIST_KEY} from "../../lib/event-catalog"
+import {withStoreLogging} from "./store-logging-middleware"
 
 export const SCOPES = {
 	/** Always active — app-wide configurable shortcuts */
@@ -68,23 +70,32 @@ interface KeybindingsState {
 }
 
 export const useKeybindingsStore = create<KeybindingsState>()(
-	persist(
-		(set, get) => ({
-			customKeys: {},
-			getKeys: (id) => get().customKeys[id] ?? DEFAULT_BINDINGS[id]?.defaultKeys ?? "",
-			updateBinding: (id, keys) => set((state) => ({customKeys: {...state.customKeys, [id]: keys}})),
-			resetBinding: (id) =>
-				set((state) => {
-					// biome-ignore lint/correctness/noUnusedVariables: destructure to omit id
-					const {[id]: _removed, ...rest} = state.customKeys
-					return {customKeys: rest}
-				}),
-			resetAll: () => set({customKeys: {}}),
-		}),
+	devtools(
+		persist(
+			withStoreLogging(STORE_KEY.KEYBINDINGS, (set, get) => ({
+				customKeys: {},
+				getKeys: (id) => get().customKeys[id] ?? DEFAULT_BINDINGS[id]?.defaultKeys ?? "",
+				updateBinding: (id, keys) =>
+					set(
+						(state) => ({customKeys: {...state.customKeys, [id]: keys}}),
+						false,
+						{type: STORE_ACTION.KEYBINDINGS.UPDATE_BINDING, id, keys},
+					),
+				resetBinding: (id) =>
+					set((state) => {
+						const {[id]: _removed, ...rest} = state.customKeys
+						return {customKeys: rest}
+					}, false, {type: STORE_ACTION.KEYBINDINGS.RESET_BINDING, id}),
+				resetAll: () => set({customKeys: {}}, false, {type: STORE_ACTION.KEYBINDINGS.RESET_ALL}),
+			})),
+			{
+				name: STORE_PERSIST_KEY[STORE_KEY.KEYBINDINGS],
+				// Persist only the user's overrides, not the full binding metadata
+				partialize: (state) => ({customKeys: state.customKeys}),
+			},
+		),
 		{
-			name: "cc-inspect-keybindings",
-			// Persist only the user's overrides, not the full binding metadata
-			partialize: (state) => ({customKeys: state.customKeys}),
+			name: STORE_DEVTOOLS_NAME[STORE_KEY.KEYBINDINGS],
 		},
 	),
 )

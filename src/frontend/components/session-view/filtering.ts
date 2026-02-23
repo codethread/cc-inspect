@@ -1,4 +1,5 @@
 import type {Event, EventType} from "#types"
+import {SESSION_EVENT_TYPE} from "../../../lib/event-catalog"
 import {getEventSearchableText} from "./helpers"
 
 export interface FilterCriteria {
@@ -12,8 +13,9 @@ export interface FilterCriteria {
 
 export function matchesFilters(event: Event, criteria: FilterCriteria): boolean {
 	if (criteria.errorsOnly) {
-		const isFailedResult = event.data.type === "tool-result" && !event.data.success
-		const isLinkedToolUse = event.data.type === "tool-use" && criteria.failedToolUseIds.has(event.data.toolId)
+		const isFailedResult = event.data.type === SESSION_EVENT_TYPE.TOOL_RESULT && !event.data.success
+		const isLinkedToolUse =
+			event.data.type === SESSION_EVENT_TYPE.TOOL_USE && criteria.failedToolUseIds.has(event.data.toolId)
 		if (!isFailedResult && !isLinkedToolUse) return false
 	}
 	if (criteria.typeInclude.size > 0 && !criteria.typeInclude.has(event.type)) return false

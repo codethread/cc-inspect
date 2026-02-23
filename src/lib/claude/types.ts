@@ -1,6 +1,12 @@
 // Domain types for Claude Code session logs
 
 import {z} from "zod"
+import {
+	CLAUDE_CONTENT_TYPE,
+	CLAUDE_LOG_ENTRY_TYPE,
+	SESSION_EVENT_TYPE,
+	SESSION_EVENT_TYPE_VALUES,
+} from "../event-catalog"
 
 // Base Zod schemas
 export const UsageSchema = z.object({
@@ -18,18 +24,18 @@ export const UsageSchema = z.object({
 })
 
 export const TextContentSchema = z.object({
-	type: z.literal("text"),
+	type: z.literal(CLAUDE_CONTENT_TYPE.TEXT),
 	text: z.string(),
 })
 
 export const ThinkingContentSchema = z.object({
-	type: z.literal("thinking"),
+	type: z.literal(CLAUDE_CONTENT_TYPE.THINKING),
 	thinking: z.string(),
 	signature: z.string().optional(),
 })
 
 export const ToolUseContentSchema = z.object({
-	type: z.literal("tool_use"),
+	type: z.literal(CLAUDE_CONTENT_TYPE.TOOL_USE),
 	id: z.string(),
 	name: z.string(),
 	input: z.record(z.string(), z.unknown()),
@@ -45,7 +51,7 @@ export const ImageContentSchema = z.object({
 })
 
 export const ToolResultContentSchema = z.object({
-	type: z.literal("tool_result"),
+	type: z.literal(CLAUDE_CONTENT_TYPE.TOOL_RESULT),
 	tool_use_id: z.string(),
 	content: z.union([z.string(), z.array(z.union([TextContentSchema, ImageContentSchema]))]),
 	is_error: z.boolean().optional(),
@@ -94,7 +100,7 @@ export const ToolUseResultSchema = z.object({
 })
 
 export const MessageSchema = z.object({
-	role: z.enum(["user", "assistant"]),
+	role: z.enum([CLAUDE_LOG_ENTRY_TYPE.USER, CLAUDE_LOG_ENTRY_TYPE.ASSISTANT]),
 	content: z.union([z.array(MessageContentSchema), z.string()]),
 	model: z.string().optional(),
 	id: z.string().optional(),
@@ -148,19 +154,19 @@ export type LogEntry = z.infer<typeof LogEntrySchema>
 
 // Processed event types for visualization
 export const UserMessageDataSchema = z.object({
-	type: z.literal("user-message"),
+	type: z.literal(SESSION_EVENT_TYPE.USER_MESSAGE),
 	text: z.string(),
 	model: z.string().optional(),
 })
 
 export const AssistantMessageDataSchema = z.object({
-	type: z.literal("assistant-message"),
+	type: z.literal(SESSION_EVENT_TYPE.ASSISTANT_MESSAGE),
 	text: z.string(),
 	model: z.string().optional(),
 })
 
 export const ToolUseDataSchema = z.object({
-	type: z.literal("tool-use"),
+	type: z.literal(SESSION_EVENT_TYPE.TOOL_USE),
 	toolName: z.string(),
 	toolId: z.string(),
 	input: z.record(z.string(), z.unknown()),
@@ -170,7 +176,7 @@ export const ToolUseDataSchema = z.object({
 })
 
 export const ToolResultDataSchema = z.object({
-	type: z.literal("tool-result"),
+	type: z.literal(SESSION_EVENT_TYPE.TOOL_RESULT),
 	toolUseId: z.string(),
 	success: z.boolean(),
 	output: z.string(),
@@ -178,12 +184,12 @@ export const ToolResultDataSchema = z.object({
 })
 
 export const ThinkingDataSchema = z.object({
-	type: z.literal("thinking"),
+	type: z.literal(SESSION_EVENT_TYPE.THINKING),
 	content: z.string(),
 })
 
 export const AgentSpawnDataSchema = z.object({
-	type: z.literal("agent-spawn"),
+	type: z.literal(SESSION_EVENT_TYPE.AGENT_SPAWN),
 	agentId: z.string(),
 	description: z.string(),
 	prompt: z.string(),
@@ -191,7 +197,7 @@ export const AgentSpawnDataSchema = z.object({
 })
 
 export const SummaryDataSchema = z.object({
-	type: z.literal("summary"),
+	type: z.literal(SESSION_EVENT_TYPE.SUMMARY),
 	summary: z.string(),
 })
 
@@ -205,15 +211,7 @@ export const EventDataSchema = z.discriminatedUnion("type", [
 	SummaryDataSchema,
 ])
 
-export const EventTypeSchema = z.enum([
-	"user-message",
-	"assistant-message",
-	"tool-use",
-	"tool-result",
-	"thinking",
-	"agent-spawn",
-	"summary",
-])
+export const EventTypeSchema = z.enum(SESSION_EVENT_TYPE_VALUES)
 
 export const EventSchema = z.object({
 	id: z.string(),

@@ -5,6 +5,7 @@ import {parseArgs} from "util"
 import envPaths from "env-paths"
 import index from "../frontend/index.html"
 import {Claude} from "../lib/claude"
+import {LOG_MESSAGE, LOG_MODULE} from "../lib/event-catalog"
 import {LogEntrySchema} from "../lib/log/types"
 import {flushAll, getLogWriter, getServerLogger, initLogging} from "../lib/log/server-instance"
 import type {LogLevel} from "../lib/log/types"
@@ -48,14 +49,14 @@ Examples:
 	const minLevel = (process.env.CC_INSPECT_LOG_LEVEL as LogLevel) || "info"
 	const {sessionId, logFile} = initLogging(logDir, minLevel)
 
-	const log = getServerLogger("server")
+	const log = getServerLogger(LOG_MODULE.SERVER)
 
 	// Pre-load session if provided via CLI (for validation)
 	let cliSessionPath: string | undefined
 
 	if (values.session) {
 		cliSessionPath = values.session as string
-		log.info("validating session logs", {path: cliSessionPath})
+		log.info(LOG_MESSAGE.SERVER_VALIDATING_SESSION_LOGS, {path: cliSessionPath})
 		try {
 			const sid = basename(cliSessionPath).replace(".jsonl", "")
 			const projectDir = dirname(cliSessionPath)
@@ -65,13 +66,13 @@ Examples:
 				sessionFilePath: cliSessionPath,
 				sessionAgentDir: join(projectDir, sid, "subagents"),
 			})
-			log.info("session validated", {
+			log.info(LOG_MESSAGE.SERVER_SESSION_VALIDATED, {
 				events: sessionData.allEvents.length,
 				agents: sessionData.mainAgent.children.length + 1,
 			})
 		} catch (error) {
 			const msg = error instanceof Error ? error.message : String(error)
-			log.error("failed to parse session logs", {
+			log.error(LOG_MESSAGE.SERVER_FAILED_TO_PARSE_SESSION_LOGS, {
 				err: msg,
 				stack: error instanceof Error ? error.stack : undefined,
 			})
@@ -124,7 +125,7 @@ Examples:
 		},
 	})
 
-	log.info("server started", {
+	log.info(LOG_MESSAGE.SERVER_STARTED, {
 		url: server.url.toString(),
 		sessionId,
 		logFile,

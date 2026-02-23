@@ -1,5 +1,6 @@
 import {useMemo} from "react"
 import type {AgentNode, Event} from "#types"
+import {SESSION_EVENT_TYPE} from "../../lib/event-catalog"
 import {getAgentColorSet} from "./session-view/agent-colors"
 import {groupTurnEvents} from "./session-view/grouping"
 import {formatTime, getEventSummary} from "./session-view/helpers"
@@ -15,7 +16,7 @@ function UserMessageBlock({
 	isActive: boolean
 	onClick: () => void
 }) {
-	if (event.data.type !== "user-message") return null
+	if (event.data.type !== SESSION_EVENT_TYPE.USER_MESSAGE) return null
 	return (
 		<button
 			type="button"
@@ -43,7 +44,7 @@ function AssistantMessageBlock({
 	isActive: boolean
 	onClick: () => void
 }) {
-	if (event.data.type !== "assistant-message") return null
+	if (event.data.type !== SESSION_EVENT_TYPE.ASSISTANT_MESSAGE) return null
 	return (
 		<button
 			type="button"
@@ -63,7 +64,7 @@ function AssistantMessageBlock({
 }
 
 function ThinkingBlock({event, isActive, onClick}: {event: Event; isActive: boolean; onClick: () => void}) {
-	if (event.data.type !== "thinking") return null
+	if (event.data.type !== SESSION_EVENT_TYPE.THINKING) return null
 	return (
 		<button
 			type="button"
@@ -83,7 +84,7 @@ function ThinkingBlock({event, isActive, onClick}: {event: Event; isActive: bool
 }
 
 function AgentSpawnBlock({event, isActive, onClick}: {event: Event; isActive: boolean; onClick: () => void}) {
-	if (event.data.type !== "agent-spawn") return null
+	if (event.data.type !== SESSION_EVENT_TYPE.AGENT_SPAWN) return null
 	return (
 		<button
 			type="button"
@@ -105,7 +106,7 @@ function AgentSpawnBlock({event, isActive, onClick}: {event: Event; isActive: bo
 }
 
 function SummaryBlock({event, isActive, onClick}: {event: Event; isActive: boolean; onClick: () => void}) {
-	if (event.data.type !== "summary") return null
+	if (event.data.type !== SESSION_EVENT_TYPE.SUMMARY) return null
 	return (
 		<button
 			type="button"
@@ -146,7 +147,7 @@ export function TurnView({
 	const toolResultMap = useMemo(() => {
 		const map = new Map<string, Event>()
 		for (const e of allEvents) {
-			if (e.data.type === "tool-result") {
+			if (e.data.type === SESSION_EVENT_TYPE.TOOL_RESULT) {
 				map.set(e.data.toolUseId, e)
 			}
 		}
@@ -156,7 +157,7 @@ export function TurnView({
 	const pairedResultIds = useMemo(() => {
 		const ids = new Set<string>()
 		for (const e of turn.events) {
-			if (e.data.type === "tool-use") {
+			if (e.data.type === SESSION_EVENT_TYPE.TOOL_USE) {
 				const result = toolResultMap.get(e.data.toolId)
 				if (result) ids.add(result.id)
 			}
@@ -199,7 +200,7 @@ export function TurnView({
 					const isActive = event.id === selectedEventId
 
 					switch (event.data.type) {
-						case "user-message":
+						case SESSION_EVENT_TYPE.USER_MESSAGE:
 							return (
 								<UserMessageBlock
 									key={event.id}
@@ -208,7 +209,7 @@ export function TurnView({
 									onClick={() => onSelectEvent(event)}
 								/>
 							)
-						case "assistant-message":
+						case SESSION_EVENT_TYPE.ASSISTANT_MESSAGE:
 							return (
 								<AssistantMessageBlock
 									key={event.id}
@@ -217,7 +218,7 @@ export function TurnView({
 									onClick={() => onSelectEvent(event)}
 								/>
 							)
-						case "thinking":
+						case SESSION_EVENT_TYPE.THINKING:
 							return (
 								<ThinkingBlock
 									key={event.id}
@@ -226,7 +227,7 @@ export function TurnView({
 									onClick={() => onSelectEvent(event)}
 								/>
 							)
-						case "agent-spawn":
+						case SESSION_EVENT_TYPE.AGENT_SPAWN:
 							return (
 								<AgentSpawnBlock
 									key={event.id}
@@ -235,7 +236,7 @@ export function TurnView({
 									onClick={() => onSelectEvent(event)}
 								/>
 							)
-						case "summary":
+						case SESSION_EVENT_TYPE.SUMMARY:
 							return (
 								<SummaryBlock
 									key={event.id}
@@ -244,10 +245,10 @@ export function TurnView({
 									onClick={() => onSelectEvent(event)}
 								/>
 							)
-						case "tool-use":
-						case "tool-result": {
+						case SESSION_EVENT_TYPE.TOOL_USE:
+						case SESSION_EVENT_TYPE.TOOL_RESULT: {
 							// Stray tool events not in a group
-							const isError = event.data.type === "tool-result" && !event.data.success
+							const isError = event.data.type === SESSION_EVENT_TYPE.TOOL_RESULT && !event.data.success
 							return (
 								<button
 									key={event.id}

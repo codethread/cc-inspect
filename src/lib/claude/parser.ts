@@ -1,6 +1,7 @@
 // Parser for Claude Code session logs
 
 import {join} from "node:path"
+import {CLAUDE_CONTENT_TYPE, CLAUDE_LOG_ENTRY_TYPE, SESSION_EVENT_TYPE} from "../event-catalog"
 import {ParseError} from "./errors"
 import type {
 	AgentNode,
@@ -152,10 +153,10 @@ export async function findAgentLogs(
 		}
 
 		// Also check message content for Task tool results
-		if (entry.type === "user" && entry.message?.content) {
+		if (entry.type === CLAUDE_LOG_ENTRY_TYPE.USER && entry.message?.content) {
 			const content = Array.isArray(entry.message.content) ? entry.message.content : []
 			for (const item of content) {
-				if (item.type === "tool_result") {
+				if (item.type === CLAUDE_CONTENT_TYPE.TOOL_RESULT) {
 					// For tool results from Task tool, agentId is in toolUseResult
 					const result = normalizeToolUseResult(entry.toolUseResult)
 					if (result?.agentId) {
@@ -190,7 +191,7 @@ export async function findAgentLogs(
  */
 export function extractMainAgentModel(logEntries: LogEntry[]): string | undefined {
 	for (const entry of logEntries) {
-		if (entry.type === "assistant" && entry.message?.model) {
+		if (entry.type === CLAUDE_LOG_ENTRY_TYPE.ASSISTANT && entry.message?.model) {
 			return entry.message.model
 		}
 	}
@@ -274,7 +275,7 @@ interface ExtendedAgentInfo extends AgentInfo {
 export function extractAgentInfo(logEntries: LogEntry[], agentId: string): ExtendedAgentInfo {
 	// First, find the result entry that contains this agentId
 	const resultEntry = logEntries.find((e) => {
-		if (e.type !== "user") return false
+		if (e.type !== CLAUDE_LOG_ENTRY_TYPE.USER) return false
 		const result = normalizeToolUseResult(e.toolUseResult)
 		return result?.agentId === agentId
 	})
@@ -289,7 +290,7 @@ export function extractAgentInfo(logEntries: LogEntry[], agentId: string): Exten
 	let toolUseId: string | undefined
 	if (resultEntry.message?.content && Array.isArray(resultEntry.message.content)) {
 		for (const item of resultEntry.message.content) {
-			if (item.type === "tool_result") {
+			if (item.type === CLAUDE_CONTENT_TYPE.TOOL_RESULT) {
 				const toolResult = item as ToolResultContent
 				toolUseId = toolResult.tool_use_id
 				break
@@ -309,10 +310,10 @@ export function extractAgentInfo(logEntries: LogEntry[], agentId: string): Exten
 
 	// Now find the assistant message that contains the matching tool_use
 	for (const entry of logEntries) {
-		if (entry.type === "assistant" && entry.message?.content) {
+		if (entry.type === CLAUDE_LOG_ENTRY_TYPE.ASSISTANT && entry.message?.content) {
 			const content = Array.isArray(entry.message.content) ? entry.message.content : []
 			for (const item of content) {
-				if (item.type === "tool_use" && item.id === toolUseId && item.name === "Task") {
+				if (item.type === CLAUDE_CONTENT_TYPE.TOOL_USE && item.id === toolUseId && item.name === "Task") {
 					const toolUse = item as ToolUseContent
 					// Check if this is a resume call
 					const isResume = "resume" in toolUse.input
@@ -356,21 +357,23 @@ export function parseSessionEventsForAgent(
 
 		// Check if this is a tool result for this agent (happens after resume)
 		const result = normalizeToolUseResult(entry.toolUseResult)
-		if (entry.type === "user" && result?.agentId === agentId) {
+		if (entry.type === CLAUDE_LOG_ENTRY_TYPE.USER && result?.agentId === agentId) {
 			// Skip entries missing required fields
 			if (!entry.uuid || !entry.timestamp) continue
 
 			const content = entry.message?.content
 			if (Array.isArray(content)) {
 				for (const item of content) {
-					if (item.type === "tool_result") {
+					if (item.type === CLAUDE_CONTENT_TYPE.TOOL_RESULT) {
 						const toolResult = item as ToolResultContent
 						let output = ""
 
 						if (typeof toolResult.content === "string") {
 							output = toolResult.content
 						} else if (Array.isArray(toolResult.content)) {
-							output = toolResult.content.map((c) => (c.type === "text" ? c.text : "[Image]")).join("\n")
+							output = toolResult.content
+								.map((c) => (c.type === CLAUDE_CONTENT_TYPE.TEXT ? c.text : "[Image]"))
+								.join("\n")
 						}
 
 						events.push({
@@ -380,9 +383,9 @@ export function parseSessionEventsForAgent(
 							sessionId,
 							agentId,
 							agentName: null,
-							type: "tool-result" as EventType,
+							type: SESSION_EVENT_TYPE.TOOL_RESULT as EventType,
 							data: {
-								type: "tool-result",
+								type: SESSION_EVENT_TYPE.TOOL_RESULT,
 								toolUseId: toolResult.tool_use_id,
 								success: !toolResult.is_error,
 								output,
@@ -403,7 +406,11 @@ export function parseEvents(logEntries: LogEntry[], sessionId: string, agentId: 
 
 	for (const entry of logEntries) {
 		// Skip unknown log entry types (e.g., "queue-operation")
-		if (entry.type !== "summary" && entry.type !== "user" && entry.type !== "assistant") {
+		if (
+			entry.type !== CLAUDE_LOG_ENTRY_TYPE.SUMMARY &&
+			entry.type !== CLAUDE_LOG_ENTRY_TYPE.USER &&
+			entry.type !== CLAUDE_LOG_ENTRY_TYPE.ASSISTANT
+		) {
 			continue
 		}
 
@@ -411,7 +418,7 @@ export function parseEvents(logEntries: LogEntry[], sessionId: string, agentId: 
 		const result = normalizeToolUseResult(entry.toolUseResult)
 
 		// Handle summary type (which has minimal fields)
-		if (entry.type === "summary") {
+		if (entry.type === CLAUDE_LOG_ENTRY_TYPE.SUMMARY) {
 			events.push({
 				id: entry.leafUuid || entry.uuid || "unknown",
 				parentId: entry.parentUuid ?? null,
@@ -419,9 +426,9 @@ export function parseEvents(logEntries: LogEntry[], sessionId: string, agentId: 
 				sessionId,
 				agentId: agentId || entry.agentId || sessionId,
 				agentName: null,
-				type: "summary" as EventType,
+				type: SESSION_EVENT_TYPE.SUMMARY as EventType,
 				data: {
-					type: "summary",
+					type: SESSION_EVENT_TYPE.SUMMARY,
 					summary: entry.summary || "",
 				},
 			})
@@ -446,27 +453,29 @@ export function parseEvents(logEntries: LogEntry[], sessionId: string, agentId: 
 		}
 
 		// Handle user messages
-		if (entry.type === "user" && entry.message) {
+		if (entry.type === CLAUDE_LOG_ENTRY_TYPE.USER && entry.message) {
 			const content = entry.message.content
 
 			// Check if it's a tool result
 			if (Array.isArray(content)) {
 				for (const item of content) {
-					if (item.type === "tool_result") {
+					if (item.type === CLAUDE_CONTENT_TYPE.TOOL_RESULT) {
 						const toolResult = item as ToolResultContent
 						let output = ""
 
 						if (typeof toolResult.content === "string") {
 							output = toolResult.content
 						} else if (Array.isArray(toolResult.content)) {
-							output = toolResult.content.map((c) => (c.type === "text" ? c.text : "[Image]")).join("\n")
+							output = toolResult.content
+								.map((c) => (c.type === CLAUDE_CONTENT_TYPE.TEXT ? c.text : "[Image]"))
+								.join("\n")
 						}
 
 						events.push({
 							...baseEvent,
-							type: "tool-result" as EventType,
+							type: SESSION_EVENT_TYPE.TOOL_RESULT as EventType,
 							data: {
-								type: "tool-result",
+								type: SESSION_EVENT_TYPE.TOOL_RESULT,
 								toolUseId: toolResult.tool_use_id,
 								success: !toolResult.is_error,
 								output,
@@ -477,14 +486,14 @@ export function parseEvents(logEntries: LogEntry[], sessionId: string, agentId: 
 				}
 				// Also extract text content from array (e.g. command prompts)
 				const textParts = content
-					.filter((item) => item.type === "text")
+					.filter((item) => item.type === CLAUDE_CONTENT_TYPE.TEXT)
 					.map((item) => (item as TextContent).text)
 				if (textParts.length > 0) {
 					events.push({
 						...baseEvent,
-						type: "user-message" as EventType,
+						type: SESSION_EVENT_TYPE.USER_MESSAGE as EventType,
 						data: {
-							type: "user-message",
+							type: SESSION_EVENT_TYPE.USER_MESSAGE,
 							text: textParts.join("\n"),
 							model: entry.message.model,
 						},
@@ -493,9 +502,9 @@ export function parseEvents(logEntries: LogEntry[], sessionId: string, agentId: 
 			} else if (typeof content === "string") {
 				events.push({
 					...baseEvent,
-					type: "user-message" as EventType,
+					type: SESSION_EVENT_TYPE.USER_MESSAGE as EventType,
 					data: {
-						type: "user-message",
+						type: SESSION_EVENT_TYPE.USER_MESSAGE,
 						text: content,
 						model: entry.message.model,
 					},
@@ -504,42 +513,42 @@ export function parseEvents(logEntries: LogEntry[], sessionId: string, agentId: 
 		}
 
 		// Handle assistant messages
-		if (entry.type === "assistant" && entry.message) {
+		if (entry.type === CLAUDE_LOG_ENTRY_TYPE.ASSISTANT && entry.message) {
 			const content = entry.message.content
 
 			if (Array.isArray(content)) {
 				for (const item of content) {
-					if (item.type === "text") {
+					if (item.type === CLAUDE_CONTENT_TYPE.TEXT) {
 						const textContent = item as TextContent
 						events.push({
 							...baseEvent,
-							type: "assistant-message" as EventType,
+							type: SESSION_EVENT_TYPE.ASSISTANT_MESSAGE as EventType,
 							data: {
-								type: "assistant-message",
+								type: SESSION_EVENT_TYPE.ASSISTANT_MESSAGE,
 								text: textContent.text,
 								model: entry.message.model,
 							},
 						})
-					} else if (item.type === "thinking") {
+					} else if (item.type === CLAUDE_CONTENT_TYPE.THINKING) {
 						const thinkingContent = item as ThinkingContent
 						events.push({
 							...baseEvent,
-							type: "thinking" as EventType,
+							type: SESSION_EVENT_TYPE.THINKING as EventType,
 							data: {
-								type: "thinking",
+								type: SESSION_EVENT_TYPE.THINKING,
 								content: thinkingContent.thinking,
 							},
 						})
-					} else if (item.type === "tool_use") {
+					} else if (item.type === CLAUDE_CONTENT_TYPE.TOOL_USE) {
 						const toolUse = item as ToolUseContent
 						const isResume = toolUse.name === "Task" && "resume" in toolUse.input
 						const resumesAgentId = isResume ? (toolUse.input.resume as string) : undefined
 
 						events.push({
 							...baseEvent,
-							type: "tool-use" as EventType,
+							type: SESSION_EVENT_TYPE.TOOL_USE as EventType,
 							data: {
-								type: "tool-use",
+								type: SESSION_EVENT_TYPE.TOOL_USE,
 								toolName: toolUse.name,
 								toolId: toolUse.id,
 								input: toolUse.input,

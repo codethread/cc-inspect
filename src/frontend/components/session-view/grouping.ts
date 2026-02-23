@@ -1,4 +1,5 @@
 import type {AgentNode, Event} from "#types"
+import {SESSION_EVENT_TYPE} from "../../../lib/event-catalog"
 import type {
 	MainTurnSection,
 	SingleEvent,
@@ -25,7 +26,7 @@ export function groupIntoTurns(events: Event[], mainAgentId: string): Turn[] {
 
 	const byAgent = new Map<string | null, Event[]>()
 	for (const event of events) {
-		const isTaskResult = event.data.type === "tool-result" && Boolean(event.data.agentId)
+		const isTaskResult = event.data.type === SESSION_EVENT_TYPE.TOOL_RESULT && Boolean(event.data.agentId)
 		const key = isTaskResult ? mainAgentId : event.agentId
 		const list = byAgent.get(key)
 		if (list) list.push(event)
@@ -55,9 +56,9 @@ function buildAgentTurns(events: Event[], mainAgentId: string): Turn[] {
 	let pendingTaskResultSplit = false
 
 	for (const event of events) {
-		const isUserMsg = event.type === "user-message"
-		const isSpawn = event.type === "agent-spawn"
-		const isTaskResult = event.data.type === "tool-result" && Boolean(event.data.agentId)
+		const isUserMsg = event.type === SESSION_EVENT_TYPE.USER_MESSAGE
+		const isSpawn = event.type === SESSION_EVENT_TYPE.AGENT_SPAWN
+		const isTaskResult = event.data.type === SESSION_EVENT_TYPE.TOOL_RESULT && Boolean(event.data.agentId)
 
 		if (isUserMsg || isSpawn) {
 			if (current) turns.push(current)
@@ -70,9 +71,9 @@ function buildAgentTurns(events: Event[], mainAgentId: string): Turn[] {
 				timestamp: event.timestamp,
 				events: [event],
 				summary:
-					isUserMsg && event.data.type === "user-message"
+					isUserMsg && event.data.type === SESSION_EVENT_TYPE.USER_MESSAGE
 						? event.data.text.slice(0, 80)
-						: isSpawn && event.data.type === "agent-spawn"
+						: isSpawn && event.data.type === SESSION_EVENT_TYPE.AGENT_SPAWN
 							? `Agent: ${event.data.description}`
 							: "",
 			}
@@ -101,7 +102,11 @@ function buildAgentTurns(events: Event[], mainAgentId: string): Turn[] {
 			}
 			current.events.push(event)
 
-			if (event.type === "assistant-message" && !current.summary && event.data.type === "assistant-message") {
+			if (
+				event.type === SESSION_EVENT_TYPE.ASSISTANT_MESSAGE &&
+				!current.summary &&
+				event.data.type === SESSION_EVENT_TYPE.ASSISTANT_MESSAGE
+			) {
 				current.summary = event.data.text.slice(0, 80)
 			}
 		}
@@ -128,14 +133,15 @@ export function groupTurnEvents(turnEvents: Event[], pairedResultIds: Set<string
 	for (const event of turnEvents) {
 		if (pairedResultIds.has(event.id)) continue
 
-		const isToolEvent = event.type === "tool-use" || event.type === "tool-result"
+		const isToolEvent =
+			event.type === SESSION_EVENT_TYPE.TOOL_USE || event.type === SESSION_EVENT_TYPE.TOOL_RESULT
 
 		if (isToolEvent) {
 			if (!currentGroup) {
 				currentGroup = {kind: "tool-group", events: [], toolNames: []}
 			}
 			currentGroup.events.push(event)
-			if (event.type === "tool-use" && event.data.type === "tool-use") {
+			if (event.type === SESSION_EVENT_TYPE.TOOL_USE && event.data.type === SESSION_EVENT_TYPE.TOOL_USE) {
 				currentGroup.toolNames.push(event.data.toolName)
 			}
 		} else {

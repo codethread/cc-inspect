@@ -1,5 +1,7 @@
 import {create} from "zustand"
-import {persist} from "zustand/middleware"
+import {devtools, persist} from "zustand/middleware"
+import {STORE_ACTION, STORE_DEVTOOLS_NAME, STORE_KEY, STORE_PERSIST_KEY} from "../../lib/event-catalog"
+import {withStoreLogging} from "./store-logging-middleware"
 
 interface UIState {
 	filterOpen: boolean
@@ -15,25 +17,39 @@ interface UIState {
 }
 
 export const useUIStore = create<UIState>()(
-	persist(
-		(set) => ({
-			filterOpen: false,
-			searchOpen: false,
-			shortcutsOpen: false,
-			showOutline: true,
-			allToolsExpanded: true,
-			setFilterOpen: (open) => set({filterOpen: open}),
-			setSearchOpen: (open) => set({searchOpen: open}),
-			setShortcutsOpen: (open) => set({shortcutsOpen: open}),
-			setShowOutline: (show) => set({showOutline: show}),
-			setAllToolsExpanded: (expanded) => set({allToolsExpanded: expanded}),
-		}),
+	devtools(
+		persist(
+			withStoreLogging(STORE_KEY.UI, (set) => ({
+				filterOpen: false,
+				searchOpen: false,
+				shortcutsOpen: false,
+				showOutline: true,
+				allToolsExpanded: true,
+				setFilterOpen: (open) =>
+					set({filterOpen: open}, false, {type: STORE_ACTION.UI.SET_FILTER_OPEN, open}),
+				setSearchOpen: (open) =>
+					set({searchOpen: open}, false, {type: STORE_ACTION.UI.SET_SEARCH_OPEN, open}),
+				setShortcutsOpen: (open) =>
+					set({shortcutsOpen: open}, false, {type: STORE_ACTION.UI.SET_SHORTCUTS_OPEN, open}),
+				setShowOutline: (show) =>
+					set({showOutline: show}, false, {type: STORE_ACTION.UI.SET_SHOW_OUTLINE, show}),
+				setAllToolsExpanded: (expanded) =>
+					set(
+						{allToolsExpanded: expanded},
+						false,
+						{type: STORE_ACTION.UI.SET_ALL_TOOLS_EXPANDED, expanded},
+					),
+			})),
+			{
+				name: STORE_PERSIST_KEY[STORE_KEY.UI],
+				partialize: (state) => ({
+					showOutline: state.showOutline,
+					allToolsExpanded: state.allToolsExpanded,
+				}),
+			},
+		),
 		{
-			name: "cc-inspect-ui",
-			partialize: (state) => ({
-				showOutline: state.showOutline,
-				allToolsExpanded: state.allToolsExpanded,
-			}),
+			name: STORE_DEVTOOLS_NAME[STORE_KEY.UI],
 		},
 	),
 )

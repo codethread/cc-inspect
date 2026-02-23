@@ -3,6 +3,7 @@ import {useCallback, useEffect, useMemo, useRef, useState} from "react"
 import type {PointerEvent as ReactPointerEvent} from "react"
 import {useHotkeys} from "react-hotkeys-hook"
 import type {Event} from "#types"
+import {SESSION_EVENT_TYPE} from "../../lib/event-catalog"
 import {useCliSession, useSessionData} from "../api"
 import {useFilterStore} from "../stores/filter-store"
 import {formatHotkey, SCOPES, useKeybindingsStore} from "../stores/keybindings-store"
@@ -84,7 +85,7 @@ export function SessionView() {
 		let count = 0
 		const ids = new Set<string>()
 		for (const e of sessionData.allEvents) {
-			if (e.data.type === "tool-result" && !e.data.success) {
+			if (e.data.type === SESSION_EVENT_TYPE.TOOL_RESULT && !e.data.success) {
 				count++
 				ids.add(e.data.toolUseId)
 			}

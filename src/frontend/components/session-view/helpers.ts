@@ -1,33 +1,26 @@
 import type {Event, EventType} from "#types"
+import {SESSION_EVENT_TYPE, SESSION_EVENT_TYPE_VALUES} from "../../../lib/event-catalog"
 
-export const EVENT_TYPES: EventType[] = [
-	"user-message",
-	"assistant-message",
-	"tool-use",
-	"tool-result",
-	"thinking",
-	"agent-spawn",
-	"summary",
-]
+export const EVENT_TYPES: EventType[] = [...SESSION_EVENT_TYPE_VALUES]
 
 export const EVENT_TYPE_LABEL: Record<EventType, string> = {
-	"user-message": "user",
-	"assistant-message": "assistant",
-	"tool-use": "tool-use",
-	"tool-result": "result",
-	thinking: "thinking",
-	"agent-spawn": "spawn",
-	summary: "summary",
+	[SESSION_EVENT_TYPE.USER_MESSAGE]: "user",
+	[SESSION_EVENT_TYPE.ASSISTANT_MESSAGE]: "assistant",
+	[SESSION_EVENT_TYPE.TOOL_USE]: "tool-use",
+	[SESSION_EVENT_TYPE.TOOL_RESULT]: "result",
+	[SESSION_EVENT_TYPE.THINKING]: "thinking",
+	[SESSION_EVENT_TYPE.AGENT_SPAWN]: "spawn",
+	[SESSION_EVENT_TYPE.SUMMARY]: "summary",
 }
 
 export const EVENT_TYPE_COLOR: Record<EventType, string> = {
-	"user-message": "text-sky-400",
-	"assistant-message": "text-violet-400",
-	"tool-use": "text-amber-400",
-	"tool-result": "text-emerald-400",
-	thinking: "text-fuchsia-400",
-	"agent-spawn": "text-orange-400",
-	summary: "text-zinc-500",
+	[SESSION_EVENT_TYPE.USER_MESSAGE]: "text-sky-400",
+	[SESSION_EVENT_TYPE.ASSISTANT_MESSAGE]: "text-violet-400",
+	[SESSION_EVENT_TYPE.TOOL_USE]: "text-amber-400",
+	[SESSION_EVENT_TYPE.TOOL_RESULT]: "text-emerald-400",
+	[SESSION_EVENT_TYPE.THINKING]: "text-fuchsia-400",
+	[SESSION_EVENT_TYPE.AGENT_SPAWN]: "text-orange-400",
+	[SESSION_EVENT_TYPE.SUMMARY]: "text-zinc-500",
 }
 
 export function formatTime(date: Date): string {
@@ -49,7 +42,7 @@ export function formatProjectName(directory: string): string {
 }
 
 function getToolUseSummary(event: Event): string {
-	if (event.data.type !== "tool-use") return ""
+	if (event.data.type !== SESSION_EVENT_TYPE.TOOL_USE) return ""
 	const {toolName, description, input} = event.data
 	if (description) return `${toolName}: ${description}`
 
@@ -85,7 +78,7 @@ function getToolUseSummary(event: Event): string {
 }
 
 function getToolResultSummary(event: Event): string {
-	if (event.data.type !== "tool-result") return ""
+	if (event.data.type !== SESSION_EVENT_TYPE.TOOL_RESULT) return ""
 	const prefix = event.data.success ? "OK" : "ERR"
 	const output = event.data.output
 	const firstLine = output.split("\n")[0] ?? ""
@@ -95,26 +88,26 @@ function getToolResultSummary(event: Event): string {
 
 export function getEventSummary(event: Event): string {
 	switch (event.data.type) {
-		case "user-message":
+		case SESSION_EVENT_TYPE.USER_MESSAGE:
 			return event.data.text.slice(0, 120)
-		case "assistant-message":
+		case SESSION_EVENT_TYPE.ASSISTANT_MESSAGE:
 			return event.data.text.slice(0, 120)
-		case "tool-use":
+		case SESSION_EVENT_TYPE.TOOL_USE:
 			return getToolUseSummary(event)
-		case "tool-result":
+		case SESSION_EVENT_TYPE.TOOL_RESULT:
 			return getToolResultSummary(event)
-		case "thinking":
+		case SESSION_EVENT_TYPE.THINKING:
 			return event.data.content.slice(0, 80)
-		case "agent-spawn":
+		case SESSION_EVENT_TYPE.AGENT_SPAWN:
 			return event.data.description
-		case "summary":
+		case SESSION_EVENT_TYPE.SUMMARY:
 			return event.data.summary.slice(0, 120)
 	}
 }
 
 export function getEventSearchableText(event: Event): string {
 	const parts = [getEventSummary(event), event.agentName ?? "", event.type]
-	if (event.data.type === "tool-use") {
+	if (event.data.type === SESSION_EVENT_TYPE.TOOL_USE) {
 		for (const value of Object.values(event.data.input)) {
 			if (typeof value === "string") parts.push(value)
 			else if (value != null) parts.push(JSON.stringify(value))
