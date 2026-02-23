@@ -114,6 +114,16 @@ function buildAgentTurns(events: Event[], mainAgentId: string): Turn[] {
 export function groupTurnEvents(turnEvents: Event[], pairedResultIds: Set<string>): TimelineItem[] {
 	const items: TimelineItem[] = []
 	let currentGroup: ToolCallGroup | null = null
+	const flushCurrentGroup = () => {
+		if (!currentGroup) return
+
+		// If filtering removes all tool-use events, omit this run entirely so we
+		// don't show empty/partial tool artifacts.
+		if (currentGroup.toolNames.length > 0) {
+			items.push(currentGroup)
+		}
+		currentGroup = null
+	}
 
 	for (const event of turnEvents) {
 		if (pairedResultIds.has(event.id)) continue
@@ -129,14 +139,11 @@ export function groupTurnEvents(turnEvents: Event[], pairedResultIds: Set<string
 				currentGroup.toolNames.push(event.data.toolName)
 			}
 		} else {
-			if (currentGroup) {
-				items.push(currentGroup)
-				currentGroup = null
-			}
+			flushCurrentGroup()
 			items.push({kind: "single", event} satisfies SingleEvent)
 		}
 	}
-	if (currentGroup) items.push(currentGroup)
+	flushCurrentGroup()
 	return items
 }
 

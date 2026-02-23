@@ -1,6 +1,6 @@
 # SessionView Design
 
-Structured document reader with conversational turn grouping, hierarchical outline, and always-visible detail panel. Fully self-contained — manages its own session selection, filtering, and layout.
+Structured document reader with conversational turn grouping, hierarchical outline, and always-visible detail panel. `SessionView` owns layout orchestration while app/UI state is centralized in frontend stores.
 
 ## Layout
 
@@ -16,7 +16,7 @@ A compact header bar at the top contains the session picker, event count, outlin
 
 ```
 src/frontend/components/
-  SessionView.tsx           — main component and state management
+  SessionView.tsx           — main layout component and orchestration
   SessionPicker.tsx         — session/project dropdown in the header
   Outline.tsx               — left sidebar navigation
   FilterDrawer.tsx          — slide-out filter panel
@@ -32,7 +32,20 @@ src/frontend/components/
     agent-colors.ts         — AGENT_COLORS palette, getAgentColorSet
     grouping.ts             — groupIntoTurns, buildAgentTurns, groupTurnEvents, groupTurnsIntoSections
     filtering.ts            — FilterCriteria, matchesFilters
+src/frontend/stores/
+  ui-store.ts               — UI-level flags and persisted UI preferences
+  filter-store.ts           — filter state (event type include/exclude persisted)
+  selection-store.ts        — selected event + active timeline turn
+  accordion-store.ts        — per-accordion expansion state
+  keybindings-store.ts      — configurable hotkeys (persisted)
+  picker-store.ts           — session picker popover/project selection state
 ```
+
+## State Model
+
+- App/UI state should live in Zustand stores under `src/frontend/stores`, not inside component-local `useState`.
+- Persist only durable user preferences. Keep session-specific values (like selected agents) non-persistent.
+- Component-local state is reserved for transient render/DOM concerns (pointer drag state, viewport measurements, refs).
 
 ## User behaviour
 
@@ -49,6 +62,8 @@ The left sidebar shows an indented outline of the session:
 - **Agent-spawn events** appear indented with a colored dot matching the spawned agent.
 
 An `IntersectionObserver` tracks which turn is currently visible in the timeline and highlights it in the outline. Clicking any outline item smooth-scrolls to that turn in the timeline.
+
+The outline's visible/hidden state is persisted in `localStorage` under `cc-inspect-ui`, so it restores across page reloads.
 
 ### Subagent grouping
 
@@ -84,6 +99,9 @@ Consecutive tool-use/tool-result events within a turn are grouped into a collaps
 - **Expanded state**: Each tool call appears as a compact row showing tool name, a contextual summary (Read → file path, Bash → command, Grep → pattern, etc.), and success/error status. Failed rows get a red left border, red background tint, and red tool name.
 - The global **collapse/expand all** button in the header sets the default state for all accordions at once.
 - **Clicking a tool row**: Opens that event's full details in the right panel, including both the tool input and the linked tool result.
+- Empty tool-call accordions are never rendered; if filtering removes all tool-use rows from a run, that run is omitted from the timeline.
+
+The global tool-call expanded/collapsed preference is persisted in `localStorage` under `cc-inspect-ui`.
 
 ### Detail panel (always visible)
 
@@ -129,6 +147,9 @@ A slide-out filter drawer (triggered from the header) provides:
 - **Errors only toggle** — shows only failed tool-result events and their linked tool-use events. Also available as a red-tinted button in the header for quick access.
 
 The header filter icon turns amber when any filter is active.
+
+Event-type include/exclude choices are persisted in `localStorage` under `cc-inspect-filter-event-types`. Agent selections are intentionally not persisted because they are session-specific.
+When **Errors only** is enabled, `tool-use` is temporarily forced visible (if hidden) so failed tool calls are readable; that temporary override is reverted when **Errors only** is disabled.
 
 ### Error visibility
 
@@ -183,4 +204,4 @@ Custom bindings are persisted in `localStorage` under the key `cc-inspect-keybin
 
 ## Props
 
-None — `SessionView` is fully self-contained. It calls API hooks directly (`useDirectories`, `useSessions`, `useSessionData`, `useCliSession`) and manages all state internally.
+None — `SessionView` calls API hooks directly (`useDirectories`, `useSessions`, `useSessionData`, `useCliSession`) and coordinates store-backed UI state.

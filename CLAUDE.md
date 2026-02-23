@@ -81,7 +81,7 @@ Re-exports all SDK types via `export * from "./lib/claude"` so the `#types` impo
 
 ### Frontend (src/frontend/App.tsx, src/frontend/frontend.tsx)
 
-React app that renders a single `SessionView` component — a structured document reader with turn grouping, outline sidebar, detail panel, search modal, and filter drawer. `SessionView` manages its own session selection and filtering.
+React app that renders a single `SessionView` component — a structured document reader with turn grouping, outline sidebar, detail panel, search modal, and filter drawer. `SessionView` orchestrates rendering while UI state is centralized in Zustand stores under `src/frontend/stores`.
 
 The app uses TanStack Query (`@tanstack/react-query`) for data fetching, with query/mutation hooks defined in `src/frontend/api.ts`. The `QueryClientProvider` is set up in `frontend.tsx`. CLI-provided sessions are handled by a `useCliSession` hook that attempts to load `/api/session` without parameters. The API layer rehydrates `Date` objects from JSON responses.
 
@@ -98,7 +98,7 @@ The app uses TanStack Query (`@tanstack/react-query`) for data fetching, with qu
 - `src/frontend/App.tsx` - React app entry point, renders SessionView
 - `src/frontend/api.ts` - TanStack Query hooks, fetch helper, Date rehydration
 - `src/frontend/frontend.tsx` - React DOM mounting with QueryClientProvider
-- `src/frontend/components/SessionView.tsx` - Main component and state management
+- `src/frontend/components/SessionView.tsx` - Main layout component and orchestration
 - `src/frontend/components/SessionPicker.tsx` - Session/project dropdown
 - `src/frontend/components/Outline.tsx` - Left sidebar navigation
 - `src/frontend/components/FilterDrawer.tsx` - Slide-out filter panel
@@ -110,6 +110,7 @@ The app uses TanStack Query (`@tanstack/react-query`) for data fetching, with qu
 - `src/frontend/components/session-view/` - Pure TS utilities: types, helpers, agent-colors, grouping, filtering
 - `src/frontend/components/MarkdownContent.tsx` - Markdown renderer
 - `src/frontend/index.html` - HTML entry point that imports React app
+- `src/frontend/stores/` - Zustand stores for UI/filter/selection/accordion/picker/keybinding state
 
 ## Code style
 
@@ -119,6 +120,7 @@ The app uses TanStack Query (`@tanstack/react-query`) for data fetching, with qu
 - Code can make breaking changes, there is no public api or legacy behaviour - however all checks must pass for work to be considered finished
 - avoid index files and default exports, use named files and exports for clear usage patterns. Typescript namespaces are valid to group logical functions into a cohesive collection without the need for an object to hold them.
 - use inline interfaces for return types in most cases (or shared interfaces if applicable)
+- Frontend state rule: keep app/UI state in stores (`src/frontend/stores`) rather than component-local state. Persist only durable user preferences; keep session-specific state non-persistent.
 
 ## Test style
 
