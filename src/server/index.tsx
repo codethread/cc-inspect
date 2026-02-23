@@ -84,17 +84,13 @@ Examples:
 		port: Number.parseInt(process.env.PORT || "5555", 10),
 		development: isLocal,
 
-		fetch(req, server) {
-			const url = new URL(req.url)
-			if (url.pathname === "/ws/log") {
-				if (server.upgrade(req)) return undefined
-				return new Response("Upgrade failed", {status: 400})
-			}
-			// Fall through to routes
-			return undefined
-		},
-
 		routes: {
+			"/ws/log": (req, server) => {
+				if (server.upgrade(req)) {
+					return
+				}
+				return new Response("Upgrade failed", {status: 400})
+			},
 			"/api/directories": directoriesHandler,
 			"/api/sessions": sessionsHandler,
 			"/api/session": (req) => sessionHandler(req, cliSessionPath),
