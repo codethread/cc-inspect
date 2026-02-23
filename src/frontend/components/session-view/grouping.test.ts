@@ -18,15 +18,7 @@ function makeAssistantMessageEvent(id: string): Event {
 	}
 }
 
-function makeToolUseEvent({
-	id,
-	toolId,
-	toolName,
-}: {
-	id: string
-	toolId: string
-	toolName?: string
-}): Event {
+function makeToolUseEvent({id, toolId, toolName}: {id: string; toolId: string; toolName?: string}): Event {
 	return {
 		id,
 		parentId: null,
@@ -44,13 +36,7 @@ function makeToolUseEvent({
 	}
 }
 
-function makeToolResultEvent({
-	id,
-	toolUseId,
-}: {
-	id: string
-	toolUseId: string
-}): Event {
+function makeToolResultEvent({id, toolUseId}: {id: string; toolUseId: string}): Event {
 	return {
 		id,
 		parentId: null,

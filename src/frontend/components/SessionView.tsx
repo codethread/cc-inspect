@@ -73,7 +73,8 @@ export function SessionView() {
 	const {data: sessionDataFromPath} = useSessionData(sessionPath)
 	const {data: cliSession} = useCliSession()
 	const sessionData = sessionPath ? (sessionDataFromPath ?? null) : (cliSession ?? null)
-	const resolvedSessionFilePath = sessionPath || (sessionData ? `${sessionData.logDirectory}/${sessionData.sessionId}.jsonl` : null)
+	const resolvedSessionFilePath =
+		sessionPath || (sessionData ? `${sessionData.logDirectory}/${sessionData.sessionId}.jsonl` : null)
 
 	const agents = useMemo(() => (sessionData ? collectAgents(sessionData.mainAgent) : []), [sessionData])
 	const mainAgentId = sessionData?.mainAgent.id ?? ""
@@ -211,9 +212,7 @@ export function SessionView() {
 
 			const deltaX = event.clientX - activeResize.startX
 			const nextSize =
-				activeResize.panel === "outline"
-					? activeResize.startWidth + deltaX
-					: activeResize.startWidth - deltaX
+				activeResize.panel === "outline" ? activeResize.startWidth + deltaX : activeResize.startWidth - deltaX
 			const clampedSize = clampPanelSize(activeResize.panel, activeResize.breakpoint, nextSize)
 			if (clampedSize === activeResize.previewWidth) return
 
@@ -403,7 +402,9 @@ export function SessionView() {
 		search || typeInclude.size > 0 || typeExclude.size > 0 || agentFilter.size > 0 || errorsOnly
 
 	return (
-		<div className={`h-screen flex flex-col bg-zinc-950 text-zinc-200 ${isPanelResizing ? "select-none" : ""}`}>
+		<div
+			className={`h-screen flex flex-col bg-zinc-950 text-zinc-200 ${isPanelResizing ? "select-none" : ""}`}
+		>
 			{/* Header */}
 			<header className="flex items-center gap-4 px-6 py-3 bg-zinc-900/80 border-b border-zinc-800 flex-shrink-0 backdrop-blur-sm">
 				<span className="text-sm font-semibold text-zinc-100 tracking-tight">cc-inspect</span>

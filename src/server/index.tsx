@@ -1,16 +1,20 @@
 #!/usr/bin/env bun
+import {mkdir} from "node:fs/promises"
 import {basename, dirname, join} from "node:path"
-import {serve} from "bun"
 import {parseArgs} from "util"
+import envPaths from "env-paths"
 import index from "../frontend/index.html"
 import {Claude} from "../lib/claude"
+import {LogEntrySchema} from "../lib/log/types"
+import {flushAll, getLogWriter, getServerLogger, initLogging} from "../lib/log/server-instance"
+import type {LogLevel} from "../lib/log/types"
 import {directoriesHandler} from "./routes/directories"
+import {logHandler} from "./routes/log"
 import {sessionHandler} from "./routes/session"
 import {sessionDeleteHandler} from "./routes/session-delete"
 import {sessionsHandler} from "./routes/sessions"
 
 async function main() {
-	// Parse CLI arguments
 	const {values} = parseArgs({
 		args: Bun.argv.slice(2),
 		options: {
@@ -36,52 +40,107 @@ Examples:
 		process.exit(0)
 	}
 
-	// Track CLI-provided session path
-	let cliSessionPath: string | undefined
+	// Initialize logging
+	const isLocal = process.env.IS_LOCAL === "1"
+	const logDir = isLocal ? join(process.cwd(), ".logs") : join(envPaths("cc-inspect").data, "logs")
+	await mkdir(logDir, {recursive: true})
+
+	const minLevel = (process.env.CC_INSPECT_LOG_LEVEL as LogLevel) || "info"
+	const {sessionId, logFile} = initLogging(logDir, minLevel)
+
+	const log = getServerLogger("server")
 
 	// Pre-load session if provided via CLI (for validation)
+	let cliSessionPath: string | undefined
+
 	if (values.session) {
 		cliSessionPath = values.session as string
-		console.log(`Validating session logs: ${cliSessionPath}`)
+		log.info("validating session logs", {path: cliSessionPath})
 		try {
-			const sessionId = basename(cliSessionPath).replace(".jsonl", "")
+			const sid = basename(cliSessionPath).replace(".jsonl", "")
 			const projectDir = dirname(cliSessionPath)
 			const claude = new Claude({path: dirname(projectDir)})
 			const sessionData = await claude.parseSession({
-				id: sessionId,
+				id: sid,
 				sessionFilePath: cliSessionPath,
-				sessionAgentDir: join(projectDir, sessionId, "subagents"),
+				sessionAgentDir: join(projectDir, sid, "subagents"),
 			})
-			console.log(
-				`Validated ${sessionData.allEvents.length} events from ${sessionData.mainAgent.children.length + 1} agents`,
-			)
+			log.info("session validated", {
+				events: sessionData.allEvents.length,
+				agents: sessionData.mainAgent.children.length + 1,
+			})
 		} catch (error) {
-			console.error("Failed to parse session logs:", error)
+			const msg = error instanceof Error ? error.message : String(error)
+			log.error("failed to parse session logs", {
+				err: msg,
+				stack: error instanceof Error ? error.stack : undefined,
+			})
 			process.exit(1)
 		}
 	}
 
-	const isLocal = process.env.IS_LOCAL === "1"
-
-	const server = serve({
+	const server = Bun.serve({
 		port: Number.parseInt(process.env.PORT || "5555", 10),
+		development: isLocal,
+
+		fetch(req, server) {
+			const url = new URL(req.url)
+			if (url.pathname === "/ws/log") {
+				if (server.upgrade(req)) return undefined
+				return new Response("Upgrade failed", {status: 400})
+			}
+			// Fall through to routes
+			return undefined
+		},
+
 		routes: {
 			"/api/directories": directoriesHandler,
 			"/api/sessions": sessionsHandler,
 			"/api/session": (req) => sessionHandler(req, cliSessionPath),
 			"/api/session/delete": sessionDeleteHandler,
+			"/api/log": logHandler,
 
-			// Serve index.html for all other routes
 			"/*": index,
 		},
 
-		development: isLocal,
+		websocket: {
+			message(_ws, msg) {
+				try {
+					const text = typeof msg === "string" ? msg : new TextDecoder().decode(msg)
+					const entries = JSON.parse(text)
+					const list = Array.isArray(entries) ? entries : [entries]
+					const writer = getLogWriter()
+
+					for (const raw of list) {
+						const parsed = LogEntrySchema.safeParse({...raw, component: "web"})
+						if (parsed.success) {
+							writer.write(parsed.data)
+						}
+					}
+				} catch {
+					// silently drop malformed client log messages
+				}
+			},
+		},
 	})
 
-	console.log(`Server running at ${server.url}`)
+	log.info("server started", {
+		url: server.url.toString(),
+		sessionId,
+		logFile,
+	})
+
+	console.log(`cc-inspect running at ${server.url}`)
+	console.log(`  session: ${sessionId}`)
+	console.log(`  log:     ${logFile}`)
 	if (!values.session) {
-		console.log(`Select a session from the UI to view`)
+		console.log("  Select a session from the UI to view")
 	}
+
+	// Flush logs on exit
+	process.on("beforeExit", async () => {
+		await flushAll()
+	})
 }
 
 main()

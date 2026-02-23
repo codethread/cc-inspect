@@ -75,8 +75,7 @@ export const useFilterStore = create<FilterState>()(
 
 					if (errorsOnly) {
 						const toolUseWasExcluded = nextTypeExclude.delete("tool-use")
-						const toolUseWasMissingFromInclude =
-							nextTypeInclude.size > 0 && !nextTypeInclude.has("tool-use")
+						const toolUseWasMissingFromInclude = nextTypeInclude.size > 0 && !nextTypeInclude.has("tool-use")
 
 						if (toolUseWasMissingFromInclude) {
 							nextTypeInclude.add("tool-use")
@@ -128,7 +127,10 @@ export const useFilterStore = create<FilterState>()(
 				reviver: (_key, value) => reviveEventTypeSet(value),
 			}),
 			merge: (persistedState, currentState) => {
-				const persisted = persistedState as Partial<{typeInclude: Set<EventType>; typeExclude: Set<EventType>}>
+				const persisted = persistedState as Partial<{
+					typeInclude: Set<EventType>
+					typeExclude: Set<EventType>
+				}>
 				return {
 					...currentState,
 					typeInclude: persisted.typeInclude ?? currentState.typeInclude,

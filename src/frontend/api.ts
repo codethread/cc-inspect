@@ -8,12 +8,16 @@ import type {
 	SessionHandle,
 	SessionsResponse,
 } from "#types"
+import {createClientLogger} from "../lib/log/client"
+
+const log = createClientLogger("api")
 
 async function fetchApi<T extends {status: string}>(url: string): Promise<T> {
 	const res = await fetch(url)
 	const data: T = await res.json()
 	const record = data as unknown as {status: string; error?: string}
 	if (record.status === "error") {
+		log.error("api error", {err: record.error ?? "Unknown error", data: {url}})
 		throw new Error(record.error ?? "Unknown error")
 	}
 	return data

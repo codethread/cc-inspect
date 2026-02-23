@@ -1,9 +1,11 @@
 import {basename, dirname, join} from "node:path"
 import type {SessionDataResponse} from "#types"
 import {Claude, ParseError} from "../../lib/claude"
+import {getServerLogger} from "../../lib/log/server-instance"
 import {isValidSessionPath} from "../utils"
 
-// API endpoint to load and parse a specific session
+const log = () => getServerLogger("routes.session")
+
 export async function sessionHandler(req: Request, cliSessionPath?: string): Promise<Response> {
 	const url = new URL(req.url)
 	const sessionPath = url.searchParams.get("path") || cliSessionPath
@@ -19,7 +21,6 @@ export async function sessionHandler(req: Request, cliSessionPath?: string): Pro
 		})
 	}
 
-	// Security: Validate session path to ensure it's within CLAUDE_PROJECTS_DIR
 	if (!isValidSessionPath(sessionPath)) {
 		const response: SessionDataResponse = {
 			status: "error",
@@ -32,19 +33,25 @@ export async function sessionHandler(req: Request, cliSessionPath?: string): Pro
 	}
 
 	try {
-		// Parse the session
-		console.log(`Parsing session logs: ${sessionPath}`)
 		const sessionId = basename(sessionPath).replace(".jsonl", "")
 		const projectDir = dirname(sessionPath)
 		const claude = new Claude({path: dirname(projectDir)})
-		const sessionData = await claude.parseSession({
-			id: sessionId,
-			sessionFilePath: sessionPath,
-			sessionAgentDir: join(projectDir, sessionId, "subagents"),
-		})
-		console.log(
-			`Parsed ${sessionData.allEvents.length} events from ${sessionData.mainAgent.children.length + 1} agents`,
+
+		const sessionData = await log().timed(
+			"session parsed",
+			() =>
+				claude.parseSession({
+					id: sessionId,
+					sessionFilePath: sessionPath,
+					sessionAgentDir: join(projectDir, sessionId, "subagents"),
+				}),
+			{path: sessionPath},
 		)
+
+		log().info("session loaded", {
+			events: sessionData.allEvents.length,
+			agents: sessionData.mainAgent.children.length + 1,
+		})
 
 		const response: SessionDataResponse = {
 			status: "success",
@@ -54,21 +61,20 @@ export async function sessionHandler(req: Request, cliSessionPath?: string): Pro
 			headers: {"Content-Type": "application/json"},
 		})
 	} catch (err) {
-		// Log detailed error information to console
 		if (err instanceof ParseError) {
-			console.error("Parse error with detailed information:")
-			console.error(err.toString())
-			console.error("\nFull raw log line:")
-			console.error(err.rawLine)
+			log().error("parse error", {
+				err: err.message,
+				stack: err.stack,
+				data: {rawLine: err.rawLine},
+			})
 		} else {
 			const message = err instanceof Error ? err.message : String(err)
-			console.error("Failed to parse session:", message)
-			if (err instanceof Error && err.stack) {
-				console.error(err.stack)
-			}
+			log().error("failed to parse session", {
+				err: message,
+				stack: err instanceof Error ? err.stack : undefined,
+			})
 		}
 
-		// Send simple error message to frontend
 		const message = err instanceof Error ? err.message : String(err)
 		const response: SessionDataResponse = {
 			status: "error",

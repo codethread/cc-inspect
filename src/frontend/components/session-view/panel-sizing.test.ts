@@ -46,15 +46,21 @@ describe("resolvePanelSize", () => {
 	})
 
 	it("wraps to larger breakpoints after checking below", () => {
-		expect(resolvePanelSize({panel: "outline", breakpoint: "medium", sizes: {outline: {large: 300}, detail: {}}})).toBe(300)
+		expect(
+			resolvePanelSize({panel: "outline", breakpoint: "medium", sizes: {outline: {large: 300}, detail: {}}}),
+		).toBe(300)
 	})
 
 	it("returns default size when no value exists anywhere", () => {
-		expect(resolvePanelSize({panel: "outline", breakpoint: "small", sizes: {outline: {}, detail: {}}})).toBe(220)
+		expect(resolvePanelSize({panel: "outline", breakpoint: "small", sizes: {outline: {}, detail: {}}})).toBe(
+			220,
+		)
 	})
 
 	it("clamps fallback value to active breakpoint bounds", () => {
-		expect(resolvePanelSize({panel: "detail", breakpoint: "small", sizes: {outline: {}, detail: {large: 999}}})).toBe(520)
+		expect(
+			resolvePanelSize({panel: "detail", breakpoint: "small", sizes: {outline: {}, detail: {large: 999}}}),
+		).toBe(520)
 	})
 })
 

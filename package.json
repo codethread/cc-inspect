@@ -27,6 +27,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
+    "env-paths": "^4.0.0",
     "lucide-react": "^0.575.0",
     "markdown-to-jsx": "^8.0.0",
     "nuqs": "^2.8.8",
