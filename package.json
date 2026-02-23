@@ -7,7 +7,7 @@
     "cc-inspect": "./bin/cc-inspect"
   },
   "scripts": {
-    "dev": "bun --hot src/server/index.tsx",
+    "dev": "IS_LOCAL=1 bun --hot src/server/index.tsx",
     "start": "bun src/server/index.tsx",
     "build": "bun run build.ts",
     "typecheck": "tsc --noEmit",

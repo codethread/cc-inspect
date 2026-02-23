@@ -61,6 +61,8 @@ Examples:
 		}
 	}
 
+	const isLocal = process.env.IS_LOCAL === "1"
+
 	const server = serve({
 		port: Number.parseInt(process.env.PORT || "5555", 10),
 		routes: {
@@ -73,7 +75,7 @@ Examples:
 			"/*": index,
 		},
 
-		development: false,
+		development: isLocal,
 	})
 
 	console.log(`Server running at ${server.url}`)
