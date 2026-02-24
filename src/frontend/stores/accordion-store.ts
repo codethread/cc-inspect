@@ -16,19 +16,27 @@ export const useAccordionStore = create<AccordionState>()(
 		withStoreLogging(STORE_KEY.ACCORDION, (set) => ({
 			expanded: new Map(),
 			setExpanded: (id, isExpanded) =>
-				set((state) => {
-					const next = new Map(state.expanded)
-					next.set(id, isExpanded)
-					return {expanded: next}
-				}, false, {type: STORE_ACTION.ACCORDION.SET_EXPANDED, id, isExpanded}),
+				set(
+					(state) => {
+						const next = new Map(state.expanded)
+						next.set(id, isExpanded)
+						return {expanded: next}
+					},
+					false,
+					{type: STORE_ACTION.ACCORDION.SET_EXPANDED, id, isExpanded},
+				),
 			resetAll: (defaultExpanded) =>
-				set((state) => {
-					const next = new Map<string, boolean>()
-					for (const key of state.expanded.keys()) {
-						next.set(key, defaultExpanded)
-					}
-					return {expanded: next}
-				}, false, {type: STORE_ACTION.ACCORDION.RESET_ALL, defaultExpanded}),
+				set(
+					(state) => {
+						const next = new Map<string, boolean>()
+						for (const key of state.expanded.keys()) {
+							next.set(key, defaultExpanded)
+						}
+						return {expanded: next}
+					},
+					false,
+					{type: STORE_ACTION.ACCORDION.RESET_ALL, defaultExpanded},
+				),
 		})),
 		{
 			name: STORE_DEVTOOLS_NAME[STORE_KEY.ACCORDION],

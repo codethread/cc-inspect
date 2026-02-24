@@ -76,16 +76,20 @@ export const useKeybindingsStore = create<KeybindingsState>()(
 				customKeys: {},
 				getKeys: (id) => get().customKeys[id] ?? DEFAULT_BINDINGS[id]?.defaultKeys ?? "",
 				updateBinding: (id, keys) =>
-					set(
-						(state) => ({customKeys: {...state.customKeys, [id]: keys}}),
-						false,
-						{type: STORE_ACTION.KEYBINDINGS.UPDATE_BINDING, id, keys},
-					),
+					set((state) => ({customKeys: {...state.customKeys, [id]: keys}}), false, {
+						type: STORE_ACTION.KEYBINDINGS.UPDATE_BINDING,
+						id,
+						keys,
+					}),
 				resetBinding: (id) =>
-					set((state) => {
-						const {[id]: _removed, ...rest} = state.customKeys
-						return {customKeys: rest}
-					}, false, {type: STORE_ACTION.KEYBINDINGS.RESET_BINDING, id}),
+					set(
+						(state) => {
+							const {[id]: _removed, ...rest} = state.customKeys
+							return {customKeys: rest}
+						},
+						false,
+						{type: STORE_ACTION.KEYBINDINGS.RESET_BINDING, id},
+					),
 				resetAll: () => set({customKeys: {}}, false, {type: STORE_ACTION.KEYBINDINGS.RESET_ALL}),
 			})),
 			{

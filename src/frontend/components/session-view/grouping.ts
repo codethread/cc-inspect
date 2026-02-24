@@ -22,7 +22,7 @@ import type {
 // don't create orphaned "0 tool calls" blocks in subagent sections.
 export function groupIntoTurns(events: Event[], mainAgentId: string): Turn[] {
 	const eventIndex = new Map<string, number>()
-	events.forEach((e, i) => eventIndex.set(e.id, i))
+	for (const [i, e] of events.entries()) eventIndex.set(e.id, i)
 
 	const byAgent = new Map<string | null, Event[]>()
 	for (const event of events) {

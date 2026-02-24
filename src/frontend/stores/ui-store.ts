@@ -34,11 +34,7 @@ export const useUIStore = create<UIState>()(
 				setShowOutline: (show) =>
 					set({showOutline: show}, false, {type: STORE_ACTION.UI.SET_SHOW_OUTLINE, show}),
 				setAllToolsExpanded: (expanded) =>
-					set(
-						{allToolsExpanded: expanded},
-						false,
-						{type: STORE_ACTION.UI.SET_ALL_TOOLS_EXPANDED, expanded},
-					),
+					set({allToolsExpanded: expanded}, false, {type: STORE_ACTION.UI.SET_ALL_TOOLS_EXPANDED, expanded}),
 			})),
 			{
 				name: STORE_PERSIST_KEY[STORE_KEY.UI],

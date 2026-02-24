@@ -64,8 +64,7 @@ export const useFilterStore = create<FilterState>()(
 				errorsOnly: false,
 				errorsOnlyToolUseWasExcluded: false,
 				errorsOnlyToolUseWasMissingFromInclude: false,
-				setSearch: (search) =>
-					set({search}, false, {type: STORE_ACTION.FILTER.SET_SEARCH, search}),
+				setSearch: (search) => set({search}, false, {type: STORE_ACTION.FILTER.SET_SEARCH, search}),
 				setTypeInclude: (typeInclude) =>
 					set({typeInclude}, false, {type: STORE_ACTION.FILTER.SET_TYPE_INCLUDE}),
 				setTypeExclude: (typeExclude) =>
@@ -73,55 +72,63 @@ export const useFilterStore = create<FilterState>()(
 				setAgentFilter: (agentFilter) =>
 					set({agentFilter}, false, {type: STORE_ACTION.FILTER.SET_AGENT_FILTER}),
 				setErrorsOnly: (errorsOnly) =>
-					set((state) => {
-						if (errorsOnly === state.errorsOnly) return {}
+					set(
+						(state) => {
+							if (errorsOnly === state.errorsOnly) return {}
 
-						const nextTypeInclude = new Set(state.typeInclude)
-						const nextTypeExclude = new Set(state.typeExclude)
+							const nextTypeInclude = new Set(state.typeInclude)
+							const nextTypeExclude = new Set(state.typeExclude)
 
-						if (errorsOnly) {
-							const toolUseWasExcluded = nextTypeExclude.delete(SESSION_EVENT_TYPE.TOOL_USE)
-							const toolUseWasMissingFromInclude =
-								nextTypeInclude.size > 0 && !nextTypeInclude.has(SESSION_EVENT_TYPE.TOOL_USE)
+							if (errorsOnly) {
+								const toolUseWasExcluded = nextTypeExclude.delete(SESSION_EVENT_TYPE.TOOL_USE)
+								const toolUseWasMissingFromInclude =
+									nextTypeInclude.size > 0 && !nextTypeInclude.has(SESSION_EVENT_TYPE.TOOL_USE)
 
-							if (toolUseWasMissingFromInclude) {
-								nextTypeInclude.add(SESSION_EVENT_TYPE.TOOL_USE)
+								if (toolUseWasMissingFromInclude) {
+									nextTypeInclude.add(SESSION_EVENT_TYPE.TOOL_USE)
+								}
+
+								return {
+									errorsOnly: true,
+									typeInclude: nextTypeInclude,
+									typeExclude: nextTypeExclude,
+									errorsOnlyToolUseWasExcluded: toolUseWasExcluded,
+									errorsOnlyToolUseWasMissingFromInclude: toolUseWasMissingFromInclude,
+								}
+							}
+
+							if (state.errorsOnlyToolUseWasExcluded) {
+								nextTypeExclude.add(SESSION_EVENT_TYPE.TOOL_USE)
+							}
+							if (state.errorsOnlyToolUseWasMissingFromInclude) {
+								nextTypeInclude.delete(SESSION_EVENT_TYPE.TOOL_USE)
 							}
 
 							return {
-								errorsOnly: true,
+								errorsOnly: false,
 								typeInclude: nextTypeInclude,
 								typeExclude: nextTypeExclude,
-								errorsOnlyToolUseWasExcluded: toolUseWasExcluded,
-								errorsOnlyToolUseWasMissingFromInclude: toolUseWasMissingFromInclude,
+								errorsOnlyToolUseWasExcluded: false,
+								errorsOnlyToolUseWasMissingFromInclude: false,
 							}
-						}
-
-						if (state.errorsOnlyToolUseWasExcluded) {
-							nextTypeExclude.add(SESSION_EVENT_TYPE.TOOL_USE)
-						}
-						if (state.errorsOnlyToolUseWasMissingFromInclude) {
-							nextTypeInclude.delete(SESSION_EVENT_TYPE.TOOL_USE)
-						}
-
-						return {
+						},
+						false,
+						{type: STORE_ACTION.FILTER.SET_ERRORS_ONLY, errorsOnly},
+					),
+				clearFilters: () =>
+					set(
+						{
+							search: "",
+							typeInclude: new Set<EventType>(),
+							typeExclude: new Set<EventType>(),
+							agentFilter: new Set<string>(),
 							errorsOnly: false,
-							typeInclude: nextTypeInclude,
-							typeExclude: nextTypeExclude,
 							errorsOnlyToolUseWasExcluded: false,
 							errorsOnlyToolUseWasMissingFromInclude: false,
-						}
-					}, false, {type: STORE_ACTION.FILTER.SET_ERRORS_ONLY, errorsOnly}),
-				clearFilters: () =>
-					set({
-						search: "",
-						typeInclude: new Set<EventType>(),
-						typeExclude: new Set<EventType>(),
-						agentFilter: new Set<string>(),
-						errorsOnly: false,
-						errorsOnlyToolUseWasExcluded: false,
-						errorsOnlyToolUseWasMissingFromInclude: false,
-					}, false, {type: STORE_ACTION.FILTER.CLEAR_FILTERS}),
+						},
+						false,
+						{type: STORE_ACTION.FILTER.CLEAR_FILTERS},
+					),
 			})),
 			{
 				name: STORE_PERSIST_KEY[STORE_KEY.FILTER],

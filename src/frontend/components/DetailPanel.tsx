@@ -80,7 +80,9 @@ export function DetailPanel({
 	const toolUseInputText =
 		event?.data.type === SESSION_EVENT_TYPE.TOOL_USE ? JSON.stringify(event.data.input, null, 2) : undefined
 	const linkedToolUseInputText =
-		linkedUse?.data.type === SESSION_EVENT_TYPE.TOOL_USE ? JSON.stringify(linkedUse.data.input, null, 2) : undefined
+		linkedUse?.data.type === SESSION_EVENT_TYPE.TOOL_USE
+			? JSON.stringify(linkedUse.data.input, null, 2)
+			: undefined
 
 	const resolvedSessionFilePath = useMemo(() => {
 		if (sessionFilePath?.trim()) return sessionFilePath.trim()
