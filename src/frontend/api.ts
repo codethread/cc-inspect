@@ -26,14 +26,14 @@ async function fetchApi<T extends {status: string}>(url: string): Promise<T> {
 
 // JSON serialization converts Date objects to ISO strings.
 // Rehydrate them at the data boundary so all consumers get real Date instances.
-function rehydrateEvent(event: Event): Event {
+export function rehydrateEvent(event: Event): Event {
 	return {
 		...event,
 		timestamp: new Date(event.timestamp),
 	}
 }
 
-function rehydrateAgent(agent: AgentNode): AgentNode {
+export function rehydrateAgent(agent: AgentNode): AgentNode {
 	return {
 		...agent,
 		events: agent.events.map(rehydrateEvent),
@@ -41,7 +41,7 @@ function rehydrateAgent(agent: AgentNode): AgentNode {
 	}
 }
 
-function rehydrateSessionData(data: SessionData): SessionData {
+export function rehydrateSessionData(data: SessionData): SessionData {
 	return {
 		...data,
 		mainAgent: rehydrateAgent(data.mainAgent),
@@ -100,5 +100,20 @@ export function useCliSession() {
 			}
 		},
 		retry: false,
+	})
+}
+
+interface AppConfig {
+	tailEnabled: boolean
+	sessionPath?: string
+}
+
+export function useConfig() {
+	return useQuery<AppConfig>({
+		queryKey: ["config"],
+		queryFn: async () => {
+			const res = await fetch("/api/config")
+			return res.json()
+		},
 	})
 }

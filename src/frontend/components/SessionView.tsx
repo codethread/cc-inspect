@@ -4,10 +4,11 @@ import type {PointerEvent as ReactPointerEvent} from "react"
 import {useHotkeys} from "react-hotkeys-hook"
 import type {Event} from "#types"
 import {SESSION_EVENT_TYPE} from "../../lib/event-catalog"
-import {useCliSession, useSessionData} from "../api"
+import {useCliSession, useConfig, useSessionData} from "../api"
 import {useFilterStore} from "../stores/filter-store"
 import {formatHotkey, SCOPES, useKeybindingsStore} from "../stores/keybindings-store"
 import {useSelectionStore} from "../stores/selection-store"
+import {useTailStore} from "../stores/tail-store"
 import {useUIStore} from "../stores/ui-store"
 import {DetailPanel} from "./DetailPanel"
 import {FilterDrawer} from "./FilterDrawer"
@@ -15,8 +16,10 @@ import {KeyboardShortcutsModal} from "./KeyboardShortcutsModal"
 import {Outline} from "./Outline"
 import {SearchModal} from "./SearchModal"
 import {SessionPicker} from "./SessionPicker"
+import {SubagentDrilldown} from "./SubagentDrilldown"
 import {SubagentSectionView} from "./SubagentSectionView"
 import {matchesFilters} from "./session-view/filtering"
+import type {SubagentSection, TurnSection} from "./session-view/types"
 import {
 	clampPanelSize,
 	getPanelBreakpoint,
@@ -39,6 +42,56 @@ function collectAgents(node: import("#types").AgentNode): import("#types").Agent
 	return result
 }
 
+// During tailing, inject placeholder SubagentSections for agents that have been spawned
+// (AGENT_SPAWN event exists) but don't yet have any events in the timeline. This makes
+// in-progress agents visible as collapsed headers before their first event arrives.
+function injectPendingAgentSections(
+	sections: TurnSection[],
+	allEvents: import("#types").Event[],
+	agents: import("#types").AgentNode[],
+): TurnSection[] {
+	const existingAgentIds = new Set<string>()
+	for (const s of sections) {
+		if (s.kind === "subagent") existingAgentIds.add(s.agentId)
+	}
+
+	// Find AGENT_SPAWN events whose spawned agentId has no section yet
+	const spawnEvents = allEvents.filter(
+		(e) => e.data.type === SESSION_EVENT_TYPE.AGENT_SPAWN && !existingAgentIds.has(e.data.agentId),
+	)
+	if (spawnEvents.length === 0) return sections
+
+	const result: TurnSection[] = []
+	const injected = new Set<string>()
+
+	for (const section of sections) {
+		result.push(section)
+		if (section.kind !== "main") continue
+
+		// Check if this turn contains an AGENT_SPAWN for a pending agent
+		for (const event of section.turn.events) {
+			if (
+				event.data.type === SESSION_EVENT_TYPE.AGENT_SPAWN &&
+				!existingAgentIds.has(event.data.agentId) &&
+				!injected.has(event.data.agentId)
+			) {
+				const agentId = event.data.agentId
+				const agent = agents.find((a) => a.id === agentId) ?? null
+				const placeholder: SubagentSection = {
+					kind: "subagent",
+					agentId,
+					agent,
+					turns: [],
+				}
+				result.push(placeholder)
+				injected.add(agentId)
+			}
+		}
+	}
+
+	return result
+}
+
 interface PanelResizeState {
 	panel: PanelId
 	breakpoint: PanelBreakpoint
@@ -57,11 +110,13 @@ export function SessionView() {
 		shortcutsOpen,
 		showOutline,
 		allToolsExpanded,
+		drilldownAgentId,
 		setFilterOpen,
 		setSearchOpen,
 		setShortcutsOpen,
 		setShowOutline,
 		setAllToolsExpanded,
+		setDrilldownAgentId,
 	} = useUIStore()
 
 	const {search, typeInclude, typeExclude, agentFilter, errorsOnly, clearFilters} = useFilterStore()
@@ -73,9 +128,88 @@ export function SessionView() {
 
 	const {data: sessionDataFromPath} = useSessionData(sessionPath)
 	const {data: cliSession} = useCliSession()
-	const sessionData = sessionPath ? (sessionDataFromPath ?? null) : (cliSession ?? null)
+	const {data: config} = useConfig()
+
+	const {
+		connection,
+		sessionData: tailData,
+		isIdle,
+		autoScroll,
+		newEventCount,
+		startTailing,
+		stopTailing,
+		setAutoScroll,
+		resetNewEventCount,
+	} = useTailStore()
+
+	const isTailing = connection.status !== "disconnected"
+
+	const fetchedSessionData = sessionPath ? (sessionDataFromPath ?? null) : (cliSession ?? null)
+	const sessionData = isTailing ? (tailData ?? fetchedSessionData) : fetchedSessionData
+
 	const resolvedSessionFilePath =
 		sessionPath || (sessionData ? `${sessionData.logDirectory}/${sessionData.sessionId}.jsonl` : null)
+
+	// Auto-start tailing when CLI config requests it
+	const autoStartedRef = useRef(false)
+	useEffect(() => {
+		if (autoStartedRef.current) return
+		if (!config?.tailEnabled || !config.sessionPath) return
+		autoStartedRef.current = true
+		setSessionPath(config.sessionPath)
+		startTailing(config.sessionPath)
+	}, [config, setSessionPath, startTailing])
+
+	// Track event count at the moment the first snapshot arrives (new-event baseline)
+	const initialEventCountRef = useRef<number | null>(null)
+	useEffect(() => {
+		if (connection.status === "disconnected") {
+			initialEventCountRef.current = null
+			return
+		}
+		// Set baseline once, on the first snapshot after connect (tailData goes null → populated)
+		if (connection.status === "connected" && tailData && initialEventCountRef.current === null) {
+			initialEventCountRef.current = tailData.allEvents.length
+		}
+	}, [connection.status, tailData])
+
+	// Sentinel ref for auto-scroll
+	const sentinelRef = useRef<HTMLDivElement | null>(null)
+
+	// Auto-scroll when new events arrive and autoScroll is enabled — only during active tailing
+	const allEventsLength = sessionData?.allEvents.length ?? 0
+	useEffect(() => {
+		if (!isTailing || !autoScroll || !sentinelRef.current) return
+		// allEventsLength in deps triggers this when new events arrive
+		void allEventsLength
+		sentinelRef.current.scrollIntoView({behavior: "smooth"})
+	}, [isTailing, autoScroll, allEventsLength])
+
+	// Track scroll position to determine autoScroll intent — only the user
+	// physically scrolling to the bottom should re-enable autoScroll, not DOM
+	// growth from new events repositioning the sentinel into view.
+	useEffect(() => {
+		const el = timelineRef.current
+		if (!el || !isTailing) return
+
+		const handleScroll = () => {
+			const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50
+			setAutoScroll(isAtBottom)
+		}
+
+		el.addEventListener("scroll", handleScroll, {passive: true})
+		return () => el.removeEventListener("scroll", handleScroll)
+	}, [isTailing, setAutoScroll])
+
+	// Helper to check if an event is "new" (arrived after initial snapshot)
+	const isNewEvent = useCallback(
+		(eventId: string): boolean => {
+			if (!isTailing || initialEventCountRef.current === null || !tailData) return false
+			const idx = tailData.allEvents.findIndex((e) => e.id === eventId)
+			return idx >= initialEventCountRef.current
+		},
+		[isTailing, tailData],
+	)
 
 	const agents = useMemo(() => (sessionData ? collectAgents(sessionData.mainAgent) : []), [sessionData])
 	const mainAgentId = sessionData?.mainAgent.id ?? ""
@@ -369,12 +503,14 @@ export function SessionView() {
 
 	const handleSelectSession = useCallback(
 		(path: string) => {
+			stopTailing()
 			setSessionPath(path)
 			setActiveTurnId(null)
 			setSelectedEvent(null)
+			setDrilldownAgentId(null)
 			pinnedEventIdRef.current = null
 		},
-		[setSessionPath, setActiveTurnId, setSelectedEvent],
+		[stopTailing, setSessionPath, setActiveTurnId, setSelectedEvent, setDrilldownAgentId],
 	)
 
 	const handleSelectEvent = useCallback(
@@ -410,6 +546,56 @@ export function SessionView() {
 			<header className="flex items-center gap-4 px-6 py-3 bg-zinc-900/80 border-b border-zinc-800 flex-shrink-0 backdrop-blur-sm">
 				<span className="text-sm font-semibold text-zinc-100 tracking-tight">cc-inspect</span>
 				<SessionPicker sessionData={sessionData} onSelect={handleSelectSession} />
+
+				{/* Tail toggle button */}
+				{(sessionData || isTailing) && (
+					<button
+						type="button"
+						onClick={() => {
+							if (isTailing) {
+								stopTailing()
+							} else if (resolvedSessionFilePath) {
+								startTailing(resolvedSessionFilePath)
+							}
+						}}
+						className="p-1.5 rounded-lg transition-colors cursor-pointer text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800"
+						title={isTailing ? "Stop live tailing" : "Start live tailing"}
+					>
+						{isTailing ? (
+							<svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+								<rect x="5" y="5" width="14" height="14" rx="2" />
+							</svg>
+						) : (
+							<svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+								<path d="M8 5v14l11-7z" />
+							</svg>
+						)}
+					</button>
+				)}
+
+				{/* LIVE badge */}
+				{isTailing && (
+					<span
+						className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border ${
+							isIdle
+								? "bg-zinc-500/15 text-zinc-400 border-zinc-500/30"
+								: connection.status === "reconnecting"
+									? "bg-amber-500/15 text-amber-400 border-amber-500/30"
+									: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+						}`}
+					>
+						<span
+							className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+								isIdle
+									? "bg-zinc-400"
+									: connection.status === "reconnecting"
+										? "bg-amber-400"
+										: "bg-emerald-500 animate-pulse"
+							}`}
+						/>
+						{isIdle ? "IDLE" : connection.status === "reconnecting" ? "RECONNECTING" : "LIVE"}
+					</span>
+				)}
 
 				<div className="flex-1" />
 
@@ -551,7 +737,7 @@ export function SessionView() {
 			{/* Body: [outline] [timeline] [detail panel] */}
 			<div className="flex-1 flex min-h-0">
 				{/* Outline sidebar */}
-				{sessionData && showOutline && (
+				{sessionData && showOutline && !drilldownAgentId && (
 					<>
 						<aside
 							ref={outlinePanelRef}
@@ -576,7 +762,7 @@ export function SessionView() {
 				)}
 
 				{/* Timeline (center) */}
-				<main ref={timelineRef} className="flex-1 overflow-y-auto min-w-0">
+				<main ref={timelineRef} className="relative flex-1 overflow-y-auto min-w-0">
 					{!sessionData && (
 						<div className="flex items-center justify-center h-full">
 							<div className="text-center">
@@ -586,13 +772,30 @@ export function SessionView() {
 						</div>
 					)}
 
-					{sessionData && turns.length === 0 && (
+					{sessionData && turns.length === 0 && !drilldownAgentId && (
 						<div className="flex items-center justify-center h-full">
 							<div className="text-zinc-600 text-sm">No events match current filters</div>
 						</div>
 					)}
 
-					{sessionData && turns.length > 0 && (
+					{/* Drilldown view: replaces normal timeline when drilling into a subagent */}
+					{sessionData && drilldownAgentId && (
+						<>
+							<SubagentDrilldown
+								agentId={drilldownAgentId}
+								sessionData={sessionData}
+								agents={agents}
+								selectedEventId={selectedEvent?.id ?? null}
+								onSelectEvent={handleSelectEvent}
+								onTurnVisible={setActiveTurnId}
+								defaultToolsExpanded={allToolsExpanded}
+								isNewEvent={isNewEvent}
+							/>
+							<div ref={sentinelRef} />
+						</>
+					)}
+
+					{sessionData && turns.length > 0 && !drilldownAgentId && (
 						<div className="max-w-3xl mx-auto px-6 py-8 space-y-8">
 							{/* Session header */}
 							<div className="border-b border-zinc-800 pb-6 mb-2">
@@ -609,38 +812,75 @@ export function SessionView() {
 							</div>
 
 							{/* Turns */}
-							{groupTurnsIntoSections(turns, mainAgentId, agents).map((section) => {
+							{(() => {
+								const baseSections = groupTurnsIntoSections(turns, mainAgentId, agents)
+								return isTailing
+									? injectPendingAgentSections(baseSections, sessionData.allEvents, agents)
+									: baseSections
+							})().map((section) => {
 								if (section.kind === "main") {
 									const turn = section.turn
+									const isNew = turn.events.some((e) => isNewEvent(e.id))
 									return (
-										<TurnWrapper key={turn.id} turnId={turn.id} onVisible={setActiveTurnId}>
-											<TurnView
-												turn={turn}
-												agents={agents}
-												allEvents={sessionData.allEvents}
-												selectedEventId={selectedEvent?.id ?? null}
-												onSelectEvent={handleSelectEvent}
-												defaultToolsExpanded={allToolsExpanded}
-											/>
-										</TurnWrapper>
+										<div key={turn.id} className={isNew ? "tail-new-event" : undefined}>
+											<TurnWrapper turnId={turn.id} onVisible={setActiveTurnId}>
+												<TurnView
+													turn={turn}
+													agents={agents}
+													allEvents={sessionData.allEvents}
+													selectedEventId={selectedEvent?.id ?? null}
+													onSelectEvent={handleSelectEvent}
+													defaultToolsExpanded={allToolsExpanded}
+												/>
+											</TurnWrapper>
+										</div>
 									)
 								}
+								const sectionKey = `${section.agentId}-${section.turns[0]?.id}`
+								const isNew = section.turns.some((t) => t.events.some((e) => isNewEvent(e.id)))
 								return (
-									<SubagentSectionView
-										key={`${section.agentId}-${section.turns[0]?.id}`}
-										section={section}
-										agents={agents}
-										allEvents={sessionData.allEvents}
-										selectedEventId={selectedEvent?.id ?? null}
-										onSelectEvent={handleSelectEvent}
-										onTurnVisible={setActiveTurnId}
-										defaultToolsExpanded={allToolsExpanded}
-									/>
+									<div key={sectionKey} className={isNew ? "tail-new-event" : undefined}>
+										<SubagentSectionView
+											section={section}
+											agents={agents}
+											allEvents={sessionData.allEvents}
+											selectedEventId={selectedEvent?.id ?? null}
+											onSelectEvent={handleSelectEvent}
+											onTurnVisible={setActiveTurnId}
+											defaultToolsExpanded={allToolsExpanded}
+											isTailing={isTailing}
+											onDrilldown={setDrilldownAgentId}
+										/>
+									</div>
 								)
 							})}
 
 							<div className="h-32" />
+							<div ref={sentinelRef} />
 						</div>
+					)}
+					{/* Floating scroll-to-bottom button — appears when tailing and user has scrolled up */}
+					{isTailing && !autoScroll && newEventCount > 0 && (
+						<button
+							type="button"
+							onClick={() => {
+								sentinelRef.current?.scrollIntoView({behavior: "smooth"})
+								setAutoScroll(true)
+								resetNewEventCount()
+							}}
+							className="absolute bottom-6 right-6 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-600 text-white text-sm font-medium shadow-lg cursor-pointer hover:bg-emerald-500 transition-colors"
+						>
+							<svg
+								className="w-4 h-4"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								aria-hidden="true"
+							>
+								<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+							</svg>
+							{newEventCount}
+						</button>
 					)}
 				</main>
 
@@ -666,12 +906,14 @@ export function SessionView() {
 			</div>
 
 			{/* Filter drawer */}
-			<FilterDrawer
-				open={filterOpen}
-				onClose={() => setFilterOpen(false)}
-				agents={agents}
-				errorCount={errorCount}
-			/>
+			{!drilldownAgentId && (
+				<FilterDrawer
+					open={filterOpen}
+					onClose={() => setFilterOpen(false)}
+					agents={agents}
+					errorCount={errorCount}
+				/>
+			)}
 
 			{/* Search modal (configurable shortcut) */}
 			{searchOpen && sessionData && (

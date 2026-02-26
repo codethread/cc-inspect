@@ -25,6 +25,7 @@ src/frontend/components/
   TurnView.tsx              — turn renderer with all event block types
   ToolGroupAccordion.tsx    — collapsible tool call group accordion
   SubagentSectionView.tsx   — bordered subagent section wrapper
+  SubagentDrilldown.tsx     — full-width subagent drilldown with breadcrumbs
   KeyboardShortcutsModal.tsx — configurable keybindings UI (recording + localStorage persist)
   session-view/
     types.ts                — Turn, ToolCallGroup, TurnSection interfaces
@@ -39,6 +40,7 @@ src/frontend/stores/
   accordion-store.ts        — per-accordion expansion state
   keybindings-store.ts      — configurable hotkeys (persisted)
   picker-store.ts           — session picker popover/project selection state
+  tail-store.ts             — tailing state + WebSocket connection management
 ```
 
 ## State Model
@@ -202,6 +204,66 @@ A keyboard icon button at the far right of the header opens a **Keyboard shortcu
 **Resetting:** A **Reset** link appears next to any customised binding. **Reset all** in the modal header reverts everything to defaults.
 
 Custom bindings are persisted in `localStorage` under the key `cc-inspect-keybindings`, so they survive page reloads.
+
+## Live tailing
+
+### Activation
+
+Tailing is started via the play button in the header, or auto-started when the `--tail`/`-t` flag is combined with `-s <path>` at the CLI. The tail toggle button shows play/stop icons depending on active state.
+
+### LIVE badge
+
+Shown in the header when tailing is active. Three states:
+
+- **Connected**: pulsing green dot + "LIVE"
+- **Reconnecting**: yellow dot + "RECONNECTING"
+- **Idle**: grey dot + "IDLE" (after 30s of no file writes)
+
+### Floating scroll-to-bottom button
+
+When the user scrolls up while tailing (auto-scroll off) and new events have arrived, a floating button appears at the bottom-right of the timeline showing a down-arrow icon and the count of new events (e.g. "↓ 42"). Clicking it scrolls to the bottom, re-enables auto-scroll, and resets the count.
+
+### Auto-scroll
+
+Auto-scroll starts enabled when tailing begins. A scroll listener on the timeline `<main>` element tracks scroll position: when the user scrolls within 50px of the bottom, auto-scroll turns on; when farther away, it turns off. This prevents DOM growth from new events inadvertently re-enabling auto-scroll. A sentinel div at the bottom of the timeline is the scroll target when auto-scrolling to the latest event.
+
+### New event highlighting
+
+Events arriving after the initial snapshot get a brief green fade-in animation (`bg-emerald-900/20` → transparent over 1.5s). CSS-only, GPU-accelerated.
+
+### Data source
+
+When tailing, session data comes from the tail store (WebSocket streaming) instead of the TanStack Query fetch. Only one source of truth is active at a time.
+
+### Subagent display during tailing
+
+During tailing, subagent sections render differently based on completion state:
+
+**In-progress agents** (no TOOL_RESULT with matching agentId):
+- Collapsed header with coloured dot, agent label, and animated spinner
+- Pulsing border in the agent colour
+- Clicking navigates to a **drilldown view** (full-width, scoped to that agent)
+- **Label resolution before tool_result arrives**: agent metadata is not available until the task completes. The label is inferred from the pending Task tool_use descriptions in `allEvents` (matched positionally — the Nth stale agent maps to the Nth unmatched Task tool_use, ordered chronologically). Falls back to "Agent" if no match can be made.
+
+**Completed agents** (TOOL_RESULT exists):
+- Collapsed header with coloured dot, agent label, emerald checkmark, and expand chevron
+- Clicking the chevron expands inline, showing all turns (same as static rendering)
+
+**Non-tailing / page refresh**: all subagent sections render fully expanded inline (current behaviour unchanged).
+
+### Subagent drilldown view
+
+When drilling into an in-progress subagent, the main timeline is replaced by:
+
+- **Breadcrumb bar**: "Main Agent › [agent label]". Clicking "Main Agent" returns to the main timeline.
+- **Agent timeline**: events filtered to the target agent, grouped into turns, rendered with `TurnView`.
+- **No outline sidebar or filter drawer** in drilldown mode.
+- **Completion indicator**: spinner while in-progress, checkmark when complete. The user stays in drilldown when the agent completes.
+- Auto-scroll and new event highlights work the same as in the main timeline.
+
+### CLI activation
+
+The `--tail`/`-t` flag combined with `-s <path>` auto-activates tailing on mount. The server exposes this configuration via a `/api/config` endpoint, consumed by a `useConfig()` hook.
 
 ## Props
 

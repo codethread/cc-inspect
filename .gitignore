@@ -38,3 +38,7 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # structured logs
 .logs/
+
+# Dolt database files (added by bd init)
+.dolt/
+*.db

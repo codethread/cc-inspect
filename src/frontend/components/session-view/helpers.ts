@@ -105,6 +105,49 @@ export function getEventSummary(event: Event): string {
 	}
 }
 
+/**
+ * Returns descriptions of Task tool_use calls that don't yet have a corresponding
+ * tool_result. Used to label in-progress agents before their tool_result arrives.
+ */
+export function getPendingTaskDescriptions(allEvents: Event[]): string[] {
+	const completedToolUseIds = new Set<string>()
+	for (const e of allEvents) {
+		if (e.data.type === SESSION_EVENT_TYPE.TOOL_RESULT) {
+			completedToolUseIds.add(e.data.toolUseId)
+		}
+	}
+	const descriptions: string[] = []
+	for (const e of allEvents) {
+		if (
+			e.data.type === SESSION_EVENT_TYPE.TOOL_USE &&
+			e.data.toolName === "Task" &&
+			!completedToolUseIds.has(e.data.toolId) &&
+			e.data.description
+		) {
+			descriptions.push(e.data.description)
+		}
+	}
+	return descriptions
+}
+
+export function isAgentComplete(agentId: string, allEvents: Event[]): boolean {
+	let lastResult: Event | undefined
+	let lastResume: Event | undefined
+
+	for (const e of allEvents) {
+		if (e.data.type === SESSION_EVENT_TYPE.TOOL_RESULT && e.data.agentId === agentId) {
+			if (!lastResult || e.timestamp > lastResult.timestamp) lastResult = e
+		}
+		if (e.data.type === SESSION_EVENT_TYPE.TOOL_USE && e.data.resumesAgentId === agentId) {
+			if (!lastResume || e.timestamp > lastResume.timestamp) lastResume = e
+		}
+	}
+
+	if (!lastResult) return false
+	if (!lastResume) return true
+	return lastResult.timestamp >= lastResume.timestamp
+}
+
 export function getEventSearchableText(event: Event): string {
 	const parts = [getEventSummary(event), event.agentName ?? "", event.type]
 	if (event.data.type === SESSION_EVENT_TYPE.TOOL_USE) {

@@ -9,11 +9,13 @@ interface UIState {
 	shortcutsOpen: boolean
 	showOutline: boolean
 	allToolsExpanded: boolean
+	drilldownAgentId: string | null
 	setFilterOpen: (open: boolean) => void
 	setSearchOpen: (open: boolean) => void
 	setShortcutsOpen: (open: boolean) => void
 	setShowOutline: (show: boolean) => void
 	setAllToolsExpanded: (expanded: boolean) => void
+	setDrilldownAgentId: (id: string | null) => void
 }
 
 export const useUIStore = create<UIState>()(
@@ -25,6 +27,7 @@ export const useUIStore = create<UIState>()(
 				shortcutsOpen: false,
 				showOutline: true,
 				allToolsExpanded: true,
+				drilldownAgentId: null,
 				setFilterOpen: (open) =>
 					set({filterOpen: open}, false, {type: STORE_ACTION.UI.SET_FILTER_OPEN, open}),
 				setSearchOpen: (open) =>
@@ -35,6 +38,8 @@ export const useUIStore = create<UIState>()(
 					set({showOutline: show}, false, {type: STORE_ACTION.UI.SET_SHOW_OUTLINE, show}),
 				setAllToolsExpanded: (expanded) =>
 					set({allToolsExpanded: expanded}, false, {type: STORE_ACTION.UI.SET_ALL_TOOLS_EXPANDED, expanded}),
+				setDrilldownAgentId: (id) =>
+					set({drilldownAgentId: id}, false, {type: STORE_ACTION.UI.SET_DRILLDOWN_AGENT_ID, id}),
 			})),
 			{
 				name: STORE_PERSIST_KEY[STORE_KEY.UI],

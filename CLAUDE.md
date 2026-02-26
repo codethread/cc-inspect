@@ -78,12 +78,30 @@ React app that renders a single `SessionView` component — a structured documen
 
 The app uses TanStack Query (`@tanstack/react-query`) for data fetching, with query/mutation hooks defined in `src/frontend/api.ts`. The `QueryClientProvider` is set up in `frontend.tsx`. CLI-provided sessions are handled by a `useCliSession` hook that attempts to load `/api/session` without parameters. The API layer rehydrates `Date` objects from JSON responses.
 
+During live tailing, `SessionView` switches data source from TanStack Query to the tail store's WebSocket-fed `sessionData`. The `SubagentDrilldown` component provides a full-width drilldown view for in-progress subagents.
+
 **UI design and behaviour**: see `DESIGN.md` at the project root. This is the authoritative description of all layout, interactions, and event rendering — read it before working on the frontend, and update it whenever user-visible behaviour changes.
+
+### Live Tailing (src/lib/tail/, src/frontend/stores/tail-store.ts)
+
+Real-time streaming of session log events via WebSocket. Architecture:
+
+- `FileTailer` — watches a single `.jsonl` file, emits complete lines via byte-offset tracking
+- `SessionTailer` — orchestrates multiple `FileTailer`s for one session, owns incremental parse state, fans out to WebSocket subscribers
+- `TailerRegistry` — singleton managing `SessionTailer` instances (shared per session path, capped at 10)
+- `/ws/session/tail` — WebSocket route for tail connections
+- `tail-store.ts` — frontend Zustand store with WebSocket connection state machine (`disconnected → connecting → connected → reconnecting`)
+
+Protocol: client sends `{ path }`, server responds with a `snapshot` then incremental `events` messages. Supports reconnect via `resumeAfterSeq`.
+
+**Early subagent discovery**: `SessionTailer` watches the session agent directory with `node:fs` `watch` for new `agent-*.jsonl` files. When a file appears, the agent is registered and a `FileTailer` starts immediately — before the Task tool_result arrives in the main log. This makes in-progress subagents visible in real time. If the directory doesn't exist yet (no subagents spawned), a 1s poll retries until it appears. When the tool_result eventually arrives, `SessionTailer` refreshes the `AgentNode` metadata (name/description) and broadcasts the updated node to subscribers. The frontend `tail-store` handles both new-agent and metadata-update cases in `mergeEvents`.
 
 ## File Structure
 
 - `src/lib/claude/` - Self-contained Claude Code SDK (types, parser, errors, Claude class)
 - `src/lib/claude/__tests__/` - SDK test suite with .jsonl fixtures
+- `src/lib/tail/` - File/session tailing with state machines
+- `src/lib/tail/__tests__/` - Tailing test suite
 - `src/types.ts` - Re-exports SDK types + app-level API response schemas
 - `src/server/index.tsx` - Bun server entry point (CLI binary via shebang)
 - `src/server/routes/` - Thin route handlers using Claude SDK
@@ -100,10 +118,12 @@ The app uses TanStack Query (`@tanstack/react-query`) for data fetching, with qu
 - `src/frontend/components/TurnView.tsx` - Turn renderer with all event block types
 - `src/frontend/components/ToolGroupAccordion.tsx` - Collapsible tool call group accordion
 - `src/frontend/components/SubagentSectionView.tsx` - Bordered subagent section wrapper
+- `src/frontend/components/SubagentDrilldown.tsx` - Subagent drilldown view
 - `src/frontend/components/session-view/` - Pure TS utilities: types, helpers, agent-colors, grouping, filtering
 - `src/frontend/components/MarkdownContent.tsx` - Markdown renderer
 - `src/frontend/index.html` - HTML entry point that imports React app
 - `src/frontend/stores/` - Zustand stores for UI/filter/selection/accordion/picker/keybinding state
+- `src/frontend/stores/tail-store.ts` - Tailing state + WebSocket management
 
 ## Code style
 
@@ -116,96 +136,45 @@ The app uses TanStack Query (`@tanstack/react-query`) for data fetching, with qu
 - Frontend state rule: keep app/UI state in stores (`src/frontend/stores`) rather than component-local state. Persist only durable user preferences; keep session-specific state non-persistent.
 - this repo is Agent first, so all events should be logged to the development log file to allow debugging an introspection (log file is shown in `bun dev` output). Use `jq` and `rg` or Explore based subagents to obtain details.
 
+## Logging
+
+All logging goes through the structured JSONL log system. The dev log file path is shown in `bun dev` output — use `jq` and `rg` against it for debugging.
+
+### Checklist for new code
+
+1. **Catalog first** — add entries to `src/lib/event-catalog.ts` before writing any log calls:
+   - `LOG_MODULE` for new domains (e.g. `TAIL: "tail"`, `ROUTES_TAIL: "routes.tail"`)
+   - `LOG_MESSAGE` for each loggable event (e.g. `TAIL_FILE_CHANGED: "tail.file.changed"`)
+2. **Create logger at module top**:
+   - Server: `const log = () => getServerLogger(LOG_MODULE.X)` (thunk because init is deferred)
+   - Client: `const log = createClientLogger(LOG_MODULE.X)`
+3. **Log at key lifecycle points** — start, success, error, state transitions:
+   - `log().info(LOG_MESSAGE.X, { path, count, id, ... })` for structured metadata
+   - `log().error(LOG_MESSAGE.X, { err: message, stack, data: { context } })` for errors
+   - Use **different message names** for different error types (e.g. `PARSE_ERROR` vs `FAILED_TO_PARSE`)
+4. **Use `timed()`** for async operations — it auto-records `dur_ms`:
+   ```ts
+   const result = await log().timed(LOG_MESSAGE.X, () => someAsyncOp(), { path })
+   ```
+5. **Log levels**: `debug` for internal state, `info` for lifecycle/operations, `warn` for recoverable issues, `error` for failures
+
+### Module naming
+
+Follow `domain.resource` dot-notation: `server`, `routes.session`, `routes.tail`, `tail.file`, `tail.session`, `api`, `store.ui`. Match existing patterns in the catalog.
+
+## State machines
+
+Components with distinct lifecycle states (e.g. connecting → connected → reconnecting) use a **discriminated union + pure transition** pattern rather than ad-hoc boolean flags or xstate:
+
+1. **State union**: each variant on a `status` field, carrying only the data relevant to that state
+2. **Event union**: all inputs that can cause a transition
+3. **Effect union**: side effects to execute after transition (returned as data, not executed inline)
+4. **Pure `transition(state, event) → { state, effects[] }`**: exhaustive, no side effects
+5. **Single `dispatch(event)`**: the host class/store calls `transition()`, updates state, then runs effects
+
+This keeps state explicit and testable. Test transitions with `it.each` tables: `(state, event) → expectedStatus + expectedEffects`.
+
 ## Test style
 
 - tests should use tables, i.e it.each or similar. This aligns with pure functions that can assert on input and output
 - tests should try to reuse common factory functions to make refactors to inputs easier
-
-## Development process
-
-This project uses a strict plan -> build process facilitated by beads (`bd` cli) for task management. The process has two distinct phases: an exploratory planning phase (no beads), followed by an execution phase (driven by beads).
-
-### Phase 1: Planning (no beads, no planning tools)
-
-Planning is a freeform dialogue between the user and agent. The goal is to thoroughly understand the problem space before committing to a plan of execution.
-
-- **Explore**: read relevant code, ask questions, gather requirements
-- **Experiment**: write throwaway proof-of-concepts, run commands, add small tests to validate assumptions
-- **Dispose**: all exploratory artefacts are removed once they've served their purpose - nothing from this phase is kept in the codebase
-- **Document**: produce a final plan as a simple markdown file (`Plan.md` in the project root)
-
-This phase does not use beads, planning tools, or task tracking. It is purely conversational and investigative.
-
-### Phase 2: Execution (beads-driven)
-
-Once the plan is finalised, execution follows a structured loop using beads for task management.
-
-#### Setup
-
-1. **Branch**: ensure work is on a fresh feature branch off the base branch (e.g. `main`). The branch starts clean - beads data is not tracked by git.
-2. **Create the epic**: create a beads epic (`bd create --type=epic`) with the plan as its description. The epic is the single source of truth for the feature's intent and requirements.
-3. **Create the user review task**: this is the first task created and the last one completed. It acts as a final gate for the user to verify the feature meets their expectations. It is never started until everything else is done.
-4. **Create initial work tasks**: based on the epic, create the first 2-3 tasks to begin implementation.
-
-#### Task design
-
-- **Ad hoc, not upfront**: do not break the entire epic into tasks at the start - they will drift from reality as implementation progresses. Create tasks in small batches (2-3 at a time) as work is planned.
-- **Chunky, not granular**: tasks should be meaningful units of work, not micro-steps. A single task can cover a significant piece of functionality.
-- **Domain-scoped**: each task should relate to one area of concern. For example, backend and frontend changes for the same feature should be separate tasks rather than one monolithic task. But not every API change needs its own task - group logically.
-- **Start large**: prefer larger tasks initially. If they prove too broad, break future tasks down further.
-
-#### The execution loop
-
-The execution loop alternates between **worker agents** (stateless, task-focused) and an **architect agent** (stateful, epic-aware).
-
-```mermaid
-flowchart TD
-    EPIC["EPIC<br/>(source of truth)"]
-    ARCHITECT["Architect creates<br/>next task batch"]
-    WORKERS["Worker agents<br/>complete tasks"]
-    REVIEW["Architect review<br/>quality gate"]
-    SATISFIED{satisfied?}
-    REWORK["Rework: send back<br/>to worker agents"]
-    COMMIT["Git commit<br/>(reference tasks)"]
-    MORE{More work needed?<br/>epic evolution}
-    USER["User review task<br/>(final gate)"]
-
-    EPIC --> ARCHITECT
-    ARCHITECT --> WORKERS
-    WORKERS --> REVIEW
-    REVIEW --> SATISFIED
-    SATISFIED -->|no| REWORK
-    REWORK --> WORKERS
-    SATISFIED -->|yes| COMMIT
-    COMMIT --> MORE
-    MORE -->|yes| ARCHITECT
-    MORE -->|no| USER
-```
-
-**Worker agents** are stateless. They pick up tasks from `bd ready`, complete them, and report back. They have full context from the task description and can see the parent epic via `bd show`. They do not need to understand the broader plan beyond their task scope.
-
-**The architect agent** is stateful and responsible for:
-
-- **Quality gate**: reviewing completed work before committing. If the work doesn't meet standards — e.g. code doesn't align with interfaces outlined in the plan, test structure is wrong, or it drifts from the intended architecture — the architect sends it back to the worker agents for rework. Work is only committed once the architect is satisfied.
-- **Epic evolution**: if workers discover something that changes the approach (e.g. a planned library doesn't work but a viable alternative exists), the architect can adapt the epic and create new tasks accordingly. This is distinct from quality issues — it's about the plan evolving, not about substandard work.
-- Creating the next batch of tasks based on what remains
-- Escalating to the user only when a deviation fundamentally contradicts the original requirements (see Autonomy and escalation below)
-
-#### Git workflow during execution
-
-The architect commits only after reviewing and approving the work:
-
-- Stage and commit after the architect is satisfied with a task batch
-- Reference beads task IDs in commit messages for traceability between git history and beads
-- This creates a reviewable trail where commits map to approved, completed tasks — even though beads data itself is not in git
-
-#### Autonomy and escalation
-
-This process is designed to be autonomous. The user should not need to be involved between the planning phase and the user review task. The architect agent drives progress independently.
-
-Escalate to the user only when:
-
-- A blocker is encountered that fundamentally contradicts the epic's intent and cannot be resolved by adjusting the implementation approach
-- A significant scope change is needed that would alter the original requirements
-
-It is acceptable for the architect to evolve implementation details, adjust the technical approach, and even update the epic's description - as long as the original requirements and user intent are preserved. The plan is a living document; the requirements are not.

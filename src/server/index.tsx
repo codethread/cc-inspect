@@ -2,6 +2,7 @@
 import {mkdir} from "node:fs/promises"
 import {basename, dirname, join} from "node:path"
 import {parseArgs} from "util"
+import type {ServerWebSocket} from "bun"
 import envPaths from "env-paths"
 import index from "../frontend/index.html"
 import {Claude} from "../lib/claude"
@@ -13,6 +14,7 @@ import {directoriesHandler} from "./routes/directories"
 import {logHandler} from "./routes/log"
 import {sessionHandler} from "./routes/session"
 import {sessionDeleteHandler} from "./routes/session-delete"
+import {handleTailClose, handleTailMessage, handleTailUpgrade, type TailWsData} from "./routes/session-tail"
 import {sessionsHandler} from "./routes/sessions"
 
 async function main() {
@@ -20,6 +22,7 @@ async function main() {
 		args: Bun.argv.slice(2),
 		options: {
 			session: {type: "string", short: "s"},
+			tail: {type: "boolean", short: "t"},
 			help: {type: "boolean", short: "h"},
 		},
 		strict: false,
@@ -28,15 +31,17 @@ async function main() {
 	if (values.help) {
 		console.log(`cc-inspect - Visualize Claude Code session logs
 
-Usage: cc-inspect [--session <path-to-session.jsonl>]
+Usage: cc-inspect [--session <path-to-session.jsonl>] [--tail]
 
 Options:
   --session, -s  Path to session log file (optional - can select via UI)
+  --tail, -t     Enable live tailing mode (requires --session)
   --help, -h     Show this help message
 
 Examples:
   cc-inspect                                        # Start server with UI selector
   cc-inspect -s ~/.claude/projects/-Users-foo/session-id.jsonl  # Load specific session
+  cc-inspect -s ~/.claude/projects/-Users-foo/session-id.jsonl -t  # Live tail session
 `)
 		process.exit(0)
 	}
@@ -91,17 +96,37 @@ Examples:
 				}
 				return new Response("Upgrade failed", {status: 400})
 			},
+			"/ws/session/tail": (req, server) => {
+				return handleTailUpgrade(req, server)
+			},
 			"/api/directories": directoriesHandler,
 			"/api/sessions": sessionsHandler,
 			"/api/session": (req) => sessionHandler(req, cliSessionPath),
 			"/api/session/delete": sessionDeleteHandler,
 			"/api/log": logHandler,
+			"/api/config": () => {
+				const tailEnabled = !!(values.tail && values.session)
+				return new Response(
+					JSON.stringify({
+						tailEnabled,
+						sessionPath: cliSessionPath,
+					}),
+					{headers: {"Content-Type": "application/json"}},
+				)
+			},
 
 			"/*": index,
 		},
 
 		websocket: {
-			message(_ws, msg) {
+			message(ws, msg) {
+				// Tail WebSocket — identified by the TailWsData shape set during upgrade
+				if (ws.data && typeof ws.data === "object" && "sessionPath" in (ws.data as object)) {
+					handleTailMessage(ws as ServerWebSocket<TailWsData>, msg as string)
+					return
+				}
+
+				// Log WebSocket (existing behavior)
 				try {
 					const text = typeof msg === "string" ? msg : new TextDecoder().decode(msg)
 					const entries = JSON.parse(text)
@@ -116,6 +141,11 @@ Examples:
 					}
 				} catch {
 					// silently drop malformed client log messages
+				}
+			},
+			close(ws) {
+				if (ws.data && typeof ws.data === "object" && "sessionPath" in (ws.data as object)) {
+					handleTailClose(ws as ServerWebSocket<TailWsData>)
 				}
 			},
 		},
