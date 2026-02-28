@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "playwright": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "@playwright/mcp@latest",
+        "--browser",
+        "chromium",
+        "--launch-options",
+        "{\"args\":[\"--no-sandbox\",\"--disable-setuid-sandbox\"]}"
+      ]
+    }
+  }
+}

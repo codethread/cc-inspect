@@ -23,6 +23,8 @@ async function main() {
 		options: {
 			session: {type: "string", short: "s"},
 			tail: {type: "boolean", short: "t"},
+			host: {type: "string"},
+			port: {type: "string", short: "p"},
 			help: {type: "boolean", short: "h"},
 		},
 		strict: false,
@@ -31,19 +33,31 @@ async function main() {
 	if (values.help) {
 		console.log(`cc-inspect - Visualize Claude Code session logs
 
-Usage: cc-inspect [--session <path-to-session.jsonl>] [--tail]
+Usage: cc-inspect [--session <path-to-session.jsonl>] [--tail] [--host <host>] [--port <port>]
 
 Options:
   --session, -s  Path to session log file (optional - can select via UI)
   --tail, -t     Enable live tailing mode (requires --session)
+  --host         Host/interface to bind (default: HOST env var or 0.0.0.0)
+  --port, -p     Port to bind (default: PORT env var or 5555)
   --help, -h     Show this help message
 
 Examples:
   cc-inspect                                        # Start server with UI selector
   cc-inspect -s ~/.claude/projects/-Users-foo/session-id.jsonl  # Load specific session
   cc-inspect -s ~/.claude/projects/-Users-foo/session-id.jsonl -t  # Live tail session
+  cc-inspect --host 0.0.0.0 --port 5555            # Expose on local network
 `)
 		process.exit(0)
+	}
+
+	const hostname = typeof values.host === "string" ? values.host : (process.env.HOST ?? "0.0.0.0")
+	const portValue = typeof values.port === "string" ? values.port : (process.env.PORT ?? "5555")
+	const port = Number.parseInt(portValue, 10)
+
+	if (!Number.isInteger(port) || port < 1 || port > 65535) {
+		console.error(`Invalid port: ${portValue}. Expected an integer between 1 and 65535.`)
+		process.exit(1)
 	}
 
 	// Initialize logging
@@ -86,7 +100,8 @@ Examples:
 	}
 
 	const server = Bun.serve({
-		port: Number.parseInt(process.env.PORT || "5555", 10),
+		hostname,
+		port,
 		development: isLocal,
 
 		routes: {

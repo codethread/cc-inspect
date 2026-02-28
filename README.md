@@ -32,6 +32,12 @@ Or load a specific session:
 cc-inspect -s ~/.claude/projects/-Users-foo/session-id.jsonl
 ```
 
+Expose on your local network:
+
+```bash
+cc-inspect --host 0.0.0.0 --port 5555
+```
+
 View help:
 
 ```bash
