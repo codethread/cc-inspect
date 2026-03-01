@@ -1,13 +1,20 @@
 FROM node:22-slim
 
-# System deps (no Playwright/Chromium - browser runs on host via MCP)
+# System deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates curl git openssh-client gnupg unzip \
     && rm -rf /var/lib/apt/lists/*
 
-# Bun
+# Bun (root)
 RUN curl -fsSL https://bun.sh/install | bash
 ENV PATH="/root/.bun/bin:${PATH}"
+
+# Playwright CLI + Chromium — agent-optimized CLI, no MCP server needed.
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
+RUN npm install -g @playwright/cli@latest \
+    && PW="$(npm root -g)/@playwright/cli/node_modules/.bin/playwright" \
+    && "$PW" install --with-deps chromium \
+    && chmod -R a+rx /opt/ms-playwright
 
 COPY --chmod=755 entrypoint.sh /usr/local/bin/entrypoint.sh
 
