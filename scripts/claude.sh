@@ -30,8 +30,11 @@ cp "$HOME/.claude/settings.json" "$TEMP_CLAUDE_SETTINGS"
 
 TEMP_SSH_CONFIG="$(mktemp)"
 if [[ -f "$HOME/.ssh/config" ]]; then
-    # Strip macOS-only options that OpenSSH on Linux rejects; grep exits 1 on no match
-    grep -iv 'usekeychain' "$HOME/.ssh/config" > "$TEMP_SSH_CONFIG" || true
+    # Strip options incompatible with agent-only auth in a Linux container:
+    #   UseKeychain    — macOS-only, rejected by Linux OpenSSH
+    #   AddKeysToAgent — no local keyring in the container
+    #   IdentityFile   — keys aren't mounted; agent provides them
+    grep -ivE 'usekeychain|addkeystoagent|identityfile' "$HOME/.ssh/config" > "$TEMP_SSH_CONFIG" || true
 fi
 
 cleanup() {
@@ -78,6 +81,7 @@ podman run -it --rm \
     --userns=keep-id \
     --shm-size=2g \
     --security-opt seccomp=unconfined \
+    --security-opt label=disable \
     -e TERM="${TERM:-xterm-256color}" \
     -e COLORTERM="${COLORTERM:-truecolor}" \
     -v "$PROJECT_ROOT:/cc-inspect" \

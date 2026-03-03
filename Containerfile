@@ -36,6 +36,8 @@ RUN BUCKET="https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8
     && curl -fsSL "$BUCKET/$VERSION/linux-${ARCH}/claude" -o "$HOME/.local/bin/claude" \
     && chmod +x "$HOME/.local/bin/claude"
 
+RUN git config --global --add safe.directory /cc-inspect
+
 WORKDIR /cc-inspect
 
 CMD ["bash"]
