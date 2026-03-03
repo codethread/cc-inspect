@@ -19,6 +19,8 @@ RUN npm install -g @playwright/cli@latest \
 # Non-root user — UID remapped by --userns=keep-id at runtime
 RUN useradd -m -s /bin/bash user
 USER user
+RUN mkdir -p ~/.ssh && chmod 700 ~/.ssh \
+    && ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
 RUN curl -fsSL https://bun.sh/install | bash
 ENV PATH="/home/user/.bun/bin:/home/user/.local/bin:${PATH}"
 

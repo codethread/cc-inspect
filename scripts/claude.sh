@@ -55,6 +55,7 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
         podman machine ssh -- -R "$VM_SSH_SOCK:$SSH_AUTH_SOCK" -N &
         SSH_TUNNEL_PID=$!
         sleep 0.5
+        podman machine ssh -- chmod 777 "$VM_SSH_SOCK"
         SSH_ARGS+=(
             -v "$VM_SSH_SOCK:/tmp/ssh-agent.sock"
             -e "SSH_AUTH_SOCK=/tmp/ssh-agent.sock"
