@@ -30,25 +30,42 @@ cp "$HOME/.claude/settings.json" "$TEMP_CLAUDE_SETTINGS"
 
 TEMP_SSH_CONFIG="$(mktemp)"
 if [[ -f "$HOME/.ssh/config" ]]; then
-    # Strip macOS-only options that OpenSSH on Linux rejects
-    grep -iv 'usekeychain' "$HOME/.ssh/config" > "$TEMP_SSH_CONFIG"
-else
-    touch "$TEMP_SSH_CONFIG"
+    # Strip macOS-only options that OpenSSH on Linux rejects; grep exits 1 on no match
+    grep -iv 'usekeychain' "$HOME/.ssh/config" > "$TEMP_SSH_CONFIG" || true
 fi
 
-trap 'rm -f "$TEMP_CLAUDE_SETTINGS" "$TEMP_SSH_CONFIG"' EXIT
+cleanup() {
+    rm -f "$TEMP_CLAUDE_SETTINGS" "$TEMP_SSH_CONFIG"
+    [[ -n "${SSH_TUNNEL_PID:-}" ]] && kill "$SSH_TUNNEL_PID" 2>/dev/null || true
+}
+trap cleanup EXIT
 
+GIT_CONFIG_DIR=""
+if [[ -f "$HOME/.config/git/config" ]]; then
+    GIT_CONFIG_DIR="$(dirname "$(realpath "$HOME/.config/git/config")")"
+fi
+
+VM_SSH_SOCK="/tmp/host-ssh-agent.sock"
+SSH_TUNNEL_PID=""
 SSH_ARGS=()
 if [[ "$(uname -s)" == "Darwin" ]]; then
-    # macOS: Podman VM can't reach the macOS SSH agent socket; mount ~/.ssh directly
-    if [[ -d "$HOME/.ssh" ]]; then
+    if [[ -n "${SSH_AUTH_SOCK:-}" ]]; then
+        # macOS: reverse-tunnel host SSH agent into the Podman VM (virtiofs can't share sockets)
+        podman machine ssh -- rm -f "$VM_SSH_SOCK"
+        podman machine ssh -- -R "$VM_SSH_SOCK:$SSH_AUTH_SOCK" -N &
+        SSH_TUNNEL_PID=$!
+        sleep 0.5
         SSH_ARGS+=(
-            -v "$HOME/.ssh:/home/user/.ssh:ro"
-            -v "$TEMP_SSH_CONFIG:/home/user/.ssh/config:ro"
+            -v "$VM_SSH_SOCK:/tmp/ssh-agent.sock"
+            -e "SSH_AUTH_SOCK=/tmp/ssh-agent.sock"
         )
     fi
+    # Mount filtered SSH config for host entries (IdentityFile directives, etc.)
+    if [[ -f "$HOME/.ssh/config" ]]; then
+        SSH_ARGS+=(-v "$TEMP_SSH_CONFIG:/home/user/.ssh/config:ro")
+    fi
 elif [[ -n "${SSH_AUTH_SOCK:-}" ]]; then
-    # Linux: bind-mount the agent socket
+    # Linux: bind-mount the agent socket directly
     SSH_ARGS+=(
         -v "$SSH_AUTH_SOCK:/tmp/ssh-agent.sock"
         -e "SSH_AUTH_SOCK=/tmp/ssh-agent.sock"
@@ -66,7 +83,7 @@ podman run -it --rm \
     -v "$HOME/.claude:/home/user/.claude" \
     -v "$TEMP_CLAUDE_SETTINGS:/home/user/.claude/settings.json" \
     -v "$HOME/.claude.json:/home/user/.claude.json" \
-    -v "$(dirname "$(realpath "$HOME/.config/git/config")"):/home/user/.config/git:ro" \
+    ${GIT_CONFIG_DIR:+-v "$GIT_CONFIG_DIR:/home/user/.config/git:ro"} \
     "${SSH_ARGS[@]}" \
     -p 3000:3000 \
     -p 5555:5555 \
