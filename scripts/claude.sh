@@ -25,9 +25,13 @@ elif ! podman image exists "$IMAGE_NAME"; then
     podman build -t "$IMAGE_NAME" "$PROJECT_ROOT"
 fi
 
-SSH_AGENT_ARGS=()
-if [[ -n "${SSH_AUTH_SOCK:-}" ]]; then
-    SSH_AGENT_ARGS=(
+SSH_ARGS=()
+if [[ "$(uname -s)" == "Darwin" ]]; then
+    # macOS: Podman VM can't reach the macOS SSH agent socket; mount ~/.ssh directly
+    [[ -d "$HOME/.ssh" ]] && SSH_ARGS+=(-v "$HOME/.ssh:/home/user/.ssh:ro")
+elif [[ -n "${SSH_AUTH_SOCK:-}" ]]; then
+    # Linux: bind-mount the agent socket
+    SSH_ARGS+=(
         -v "$SSH_AUTH_SOCK:/tmp/ssh-agent.sock"
         -e "SSH_AUTH_SOCK=/tmp/ssh-agent.sock"
     )
@@ -42,12 +46,14 @@ podman run -it --rm \
     --userns=keep-id \
     --shm-size=2g \
     --security-opt seccomp=unconfined \
+    -e TERM="${TERM:-xterm-256color}" \
+    -e COLORTERM="${COLORTERM:-truecolor}" \
     -v "$PROJECT_ROOT:/cc-inspect" \
     -v "$HOME/.claude:/home/user/.claude" \
     -v "$TEMP_CLAUDE_SETTINGS:/home/user/.claude/settings.json" \
     -v "$HOME/.claude.json:/home/user/.claude.json" \
     -v "$HOME/.config/git:/home/user/.config/git:ro" \
-    "${SSH_AGENT_ARGS[@]}" \
+    "${SSH_ARGS[@]}" \
     -p 3000:3000 \
     -p 5555:5555 \
     "$IMAGE_NAME" \

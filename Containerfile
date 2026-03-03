@@ -22,8 +22,17 @@ USER user
 RUN curl -fsSL https://bun.sh/install | bash
 ENV PATH="/home/user/.bun/bin:/home/user/.local/bin:${PATH}"
 
-# Claude Code native binary — installs to ~/.local/bin/claude
-RUN curl -fsSL https://claude.ai/install.sh | bash
+# Claude Code — download binary directly, skip self-installer (OOMs at 2GB)
+RUN BUCKET="https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases" \
+    && VERSION=$(curl -fsSL "$BUCKET/latest") \
+    && case "$(uname -m)" in \
+        aarch64) ARCH="arm64" ;; \
+        x86_64)  ARCH="x64"   ;; \
+        *) echo "Unsupported arch: $(uname -m)" >&2; exit 1 ;; \
+    esac \
+    && mkdir -p "$HOME/.local/bin" \
+    && curl -fsSL "$BUCKET/$VERSION/linux-${ARCH}/claude" -o "$HOME/.local/bin/claude" \
+    && chmod +x "$HOME/.local/bin/claude"
 
 WORKDIR /cc-inspect
 
