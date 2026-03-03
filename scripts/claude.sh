@@ -4,7 +4,7 @@ set -euo pipefail
 
 IMAGE_NAME="cc-inspect-sandbox"
 CONTAINER_NAME="cc-inspect-sandbox"
-SCRIPT_DIR="$(dirname "$0")"
+PROJECT_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 
 NO_CACHE=false
 INTERACTIVE=false
@@ -19,10 +19,10 @@ done
 
 if [[ "$NO_CACHE" == true ]]; then
     echo "Rebuilding container image (no cache)..."
-    podman build --no-cache -t "$IMAGE_NAME" "$SCRIPT_DIR"
+    podman build --no-cache -t "$IMAGE_NAME" "$PROJECT_ROOT"
 elif ! podman image exists "$IMAGE_NAME"; then
     echo "Building container image..."
-    podman build -t "$IMAGE_NAME" "$SCRIPT_DIR"
+    podman build -t "$IMAGE_NAME" "$PROJECT_ROOT"
 fi
 
 SSH_AGENT_ARGS=()
@@ -33,13 +33,18 @@ if [[ -n "${SSH_AUTH_SOCK:-}" ]]; then
     )
 fi
 
-exec podman run -it --rm \
+TEMP_CLAUDE_SETTINGS="$(mktemp)"
+cp "$HOME/.claude/settings.json" "$TEMP_CLAUDE_SETTINGS"
+trap 'rm -f "$TEMP_CLAUDE_SETTINGS"' EXIT
+
+podman run -it --rm \
     --name "$CONTAINER_NAME" \
     --userns=keep-id \
     --shm-size=2g \
     --security-opt seccomp=unconfined \
-    -v "$(pwd):/workspace" \
+    -v "$PROJECT_ROOT:/cc-inspect" \
     -v "$HOME/.claude:/home/user/.claude" \
+    -v "$TEMP_CLAUDE_SETTINGS:/home/user/.claude/settings.json" \
     -v "$HOME/.claude.json:/home/user/.claude.json" \
     -v "$HOME/.config/git:/home/user/.config/git:ro" \
     "${SSH_AGENT_ARGS[@]}" \
