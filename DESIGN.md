@@ -12,6 +12,18 @@ Three-column layout filling the viewport:
 
 A compact header bar at the top contains the session picker, event count, outline toggle, error filter toggle, search button, tool-collapse toggle, filter drawer trigger, and keyboard shortcuts config button.
 
+### Mobile layout (<768px viewport)
+
+On narrow viewports (phones), the layout switches to a single-column view:
+
+- **Outline sidebar** is hidden (toggle button hidden too)
+- **Detail panel** is hidden from the side column; instead, selecting an event opens a **slide-up overlay** covering ~80% of the screen with a close button and translucent backdrop tap-to-dismiss
+- **Header** uses reduced padding/gaps and allows horizontal scrolling; keyboard shortcut labels are hidden
+- **Timeline** uses reduced padding (`px-3 py-4`) and tighter spacing (`space-y-4`)
+- **Search modal** stacks its two panels vertically instead of side-by-side
+
+The mobile breakpoint is detected via `window.innerWidth < 768` and updates on resize.
+
 ## File structure
 
 ```

@@ -61,10 +61,10 @@ export function SearchModal({
 				className="p-0 gap-0 bg-zinc-900 border-zinc-700 rounded-2xl top-[10%] translate-y-0 overflow-hidden"
 				style={{width: "min(1000px, calc(100vw - 1rem))", maxWidth: "none", height: "78vh"}}
 			>
-				{/* Two-panel layout */}
-				<div className="flex overflow-hidden h-full">
+				{/* Two-panel layout (stacked on mobile) */}
+				<div className="flex flex-col sm:flex-row overflow-hidden h-full">
 					{/* Left panel: search + results */}
-					<div className="w-80 flex-shrink-0 flex flex-col border-r border-zinc-800">
+					<div className="w-full sm:w-80 flex-shrink-0 flex flex-col border-b sm:border-b-0 sm:border-r border-zinc-800">
 						<Command
 							filter={() => 1}
 							value={selectedId}

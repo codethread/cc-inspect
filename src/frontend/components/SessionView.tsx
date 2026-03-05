@@ -258,6 +258,7 @@ export function SessionView() {
 	const pendingPanelWidthRef = useRef<{panel: PanelId; width: number} | null>(null)
 
 	const [viewportWidth, setViewportWidth] = useState(typeof window === "undefined" ? 1600 : window.innerWidth)
+	const isMobile = viewportWidth < 768
 	const [isPanelResizing, setIsPanelResizing] = useState(false)
 	const [savedPanelSizes, setSavedPanelSizes] = useState<PersistedPanelSizes>(() =>
 		loadPanelSizesFromStorage(typeof window === "undefined" ? null : window.localStorage),
@@ -543,8 +544,12 @@ export function SessionView() {
 			className={`h-screen flex flex-col bg-zinc-950 text-zinc-200 ${isPanelResizing ? "select-none" : ""}`}
 		>
 			{/* Header */}
-			<header className="flex items-center gap-4 px-6 py-3 bg-zinc-900/80 border-b border-zinc-800 flex-shrink-0 backdrop-blur-sm">
-				<span className="text-sm font-semibold text-zinc-100 tracking-tight">cc-inspect</span>
+			<header
+				className={`flex items-center gap-2 sm:gap-4 px-3 sm:px-6 py-2 sm:py-3 bg-zinc-900/80 border-b border-zinc-800 flex-shrink-0 backdrop-blur-sm ${isMobile ? "overflow-x-auto" : ""}`}
+			>
+				<span className="text-sm font-semibold text-zinc-100 tracking-tight whitespace-nowrap">
+					cc-inspect
+				</span>
 				<SessionPicker sessionData={sessionData} onSelect={handleSelectSession} />
 
 				{/* Tail toggle button */}
@@ -640,7 +645,7 @@ export function SessionView() {
 									d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
 								/>
 							</svg>
-							<kbd className="font-mono">{formatHotkey(getKeys("search.open"))}</kbd>
+							<kbd className="font-mono hidden sm:inline">{formatHotkey(getKeys("search.open"))}</kbd>
 						</button>
 						<button
 							type="button"
@@ -667,7 +672,7 @@ export function SessionView() {
 						<button
 							type="button"
 							onClick={() => setShowOutline(!showOutline)}
-							className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+							className={`p-1.5 rounded-lg transition-colors cursor-pointer hidden sm:block ${
 								showOutline ? "bg-zinc-800 text-zinc-300" : "text-zinc-600 hover:text-zinc-400"
 							}`}
 							title={`Toggle outline (${formatHotkey(getKeys("outline.toggle"))})`}
@@ -737,7 +742,7 @@ export function SessionView() {
 			{/* Body: [outline] [timeline] [detail panel] */}
 			<div className="flex-1 flex min-h-0">
 				{/* Outline sidebar */}
-				{sessionData && showOutline && !drilldownAgentId && (
+				{sessionData && showOutline && !drilldownAgentId && !isMobile && (
 					<>
 						<aside
 							ref={outlinePanelRef}
@@ -796,13 +801,13 @@ export function SessionView() {
 					)}
 
 					{sessionData && turns.length > 0 && !drilldownAgentId && (
-						<div className="max-w-3xl mx-auto px-6 py-8 space-y-8">
+						<div className="max-w-3xl mx-auto px-3 sm:px-6 py-4 sm:py-8 space-y-4 sm:space-y-8">
 							{/* Session header */}
-							<div className="border-b border-zinc-800 pb-6 mb-2">
-								<h1 className="text-lg font-semibold text-zinc-100 mb-1">
+							<div className="border-b border-zinc-800 pb-4 sm:pb-6 mb-2">
+								<h1 className="text-base sm:text-lg font-semibold text-zinc-100 mb-1 break-all">
 									Session {sessionData.sessionId.slice(0, 14)}
 								</h1>
-								<div className="flex items-center gap-4 text-xs text-zinc-600">
+								<div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs text-zinc-600">
 									<span>{formatDateTime(sessionData.allEvents[0]?.timestamp ?? new Date())}</span>
 									<span>{sessionData.allEvents.length} events</span>
 									<span>
@@ -884,8 +889,8 @@ export function SessionView() {
 					)}
 				</main>
 
-				{/* Detail panel (always visible) */}
-				{sessionData && (
+				{/* Detail panel — side column on desktop, slide-up overlay on mobile */}
+				{sessionData && !isMobile && (
 					<>
 						<button
 							type="button"
@@ -904,6 +909,56 @@ export function SessionView() {
 					</>
 				)}
 			</div>
+
+			{/* Mobile detail overlay */}
+			{sessionData && isMobile && selectedEvent && (
+				<div className="fixed inset-0 z-40 flex flex-col">
+					<button
+						type="button"
+						className="flex-shrink-0 h-[20vh] bg-black/60"
+						onClick={() => {
+							setSelectedEvent(null)
+							pinnedEventIdRef.current = null
+						}}
+						aria-label="Close detail panel"
+					/>
+					<div className="flex-1 min-h-0 bg-zinc-950 border-t border-zinc-700 rounded-t-xl overflow-y-auto">
+						<div className="sticky top-0 z-10 flex items-center justify-between px-4 py-2 bg-zinc-900 border-b border-zinc-800">
+							<span className="text-xs font-medium text-zinc-400">Event Detail</span>
+							<button
+								type="button"
+								onClick={() => {
+									setSelectedEvent(null)
+									pinnedEventIdRef.current = null
+								}}
+								className="p-1 rounded text-zinc-500 hover:text-zinc-300"
+								aria-label="Close"
+							>
+								<svg
+									className="w-5 h-5"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									aria-hidden="true"
+								>
+									<path
+										strokeLinecap="round"
+										strokeLinejoin="round"
+										strokeWidth={2}
+										d="M6 18L18 6M6 6l12 12"
+									/>
+								</svg>
+							</button>
+						</div>
+						<DetailPanel
+							event={selectedEvent}
+							allEvents={sessionData.allEvents}
+							agents={agents}
+							sessionFilePath={resolvedSessionFilePath}
+						/>
+					</div>
+				</div>
+			)}
 
 			{/* Filter drawer */}
 			{!drilldownAgentId && (
