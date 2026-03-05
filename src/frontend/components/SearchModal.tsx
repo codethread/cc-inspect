@@ -64,7 +64,7 @@ export function SearchModal({
 				{/* Two-panel layout (stacked on mobile) */}
 				<div className="flex flex-col sm:flex-row overflow-hidden h-full">
 					{/* Left panel: search + results */}
-					<div className="w-full sm:w-80 flex-shrink-0 flex flex-col border-b sm:border-b-0 sm:border-r border-zinc-800">
+					<div className="w-full sm:w-80 flex-shrink-0 flex flex-col border-b sm:border-b-0 sm:border-r border-zinc-800 max-h-[40vh] sm:max-h-none">
 						<Command
 							filter={() => 1}
 							value={selectedId}

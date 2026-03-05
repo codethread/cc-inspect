@@ -672,7 +672,7 @@ export function SessionView() {
 						<button
 							type="button"
 							onClick={() => setShowOutline(!showOutline)}
-							className={`p-1.5 rounded-lg transition-colors cursor-pointer hidden sm:block ${
+							className={`p-1.5 rounded-lg transition-colors cursor-pointer hidden md:block ${
 								showOutline ? "bg-zinc-800 text-zinc-300" : "text-zinc-600 hover:text-zinc-400"
 							}`}
 							title={`Toggle outline (${formatHotkey(getKeys("outline.toggle"))})`}
