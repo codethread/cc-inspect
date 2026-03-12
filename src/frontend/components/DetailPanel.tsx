@@ -1,5 +1,5 @@
-import {useEffect, useMemo, useState} from "react"
 import {AlertCircleIcon, CheckIcon, CircleQuestionMarkIcon, CopyIcon} from "lucide-react"
+import {useEffect, useMemo, useState} from "react"
 import type {AgentNode, Event} from "#types"
 import {SESSION_EVENT_TYPE} from "../../lib/event-catalog"
 import {MarkdownContent} from "./MarkdownContent"
@@ -51,12 +51,14 @@ export function DetailPanel({
 	agents,
 	sessionFilePath,
 	onNavigate,
+	onOpenSession,
 }: {
 	event: Event | null
 	allEvents: Event[]
 	agents: AgentNode[]
 	sessionFilePath?: string | null
 	onNavigate?: () => void
+	onOpenSession?: (path: string) => void
 }) {
 	const [copyState, setCopyState] = useState<{
 		status: CopyStatus
@@ -156,6 +158,8 @@ export function DetailPanel({
 	const colors = getAgentColorSet(agents, event.agentId)
 	const copyIdStatus = getCopyStatus("event-id")
 	const copyJqStatus = getCopyStatus("jq-command")
+	const selectedPlanHandoff =
+		event.data.type === SESSION_EVENT_TYPE.USER_MESSAGE ? event.data.planHandoff : undefined
 
 	return (
 		<div className="h-full flex flex-col bg-zinc-950 border-l border-zinc-800">
@@ -237,12 +241,47 @@ export function DetailPanel({
 				{event.data.type === SESSION_EVENT_TYPE.USER_MESSAGE && (
 					<div className="px-4 py-4">
 						<div className="flex items-center justify-between mb-3">
-							<div className="text-xs font-semibold text-sky-400 uppercase tracking-wider">User Message</div>
+							<div
+								className={`text-xs font-semibold uppercase tracking-wider ${
+									selectedPlanHandoff ? "text-emerald-400" : "text-sky-400"
+								}`}
+							>
+								{selectedPlanHandoff ? "Plan Handoff" : "User Message"}
+							</div>
 							{renderCopyIconButton("user-message", event.data.text, "Copy user message")}
 						</div>
+						{selectedPlanHandoff && (
+							<div className="mb-4 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3">
+								<div className="text-sm text-zinc-200 mb-2">
+									{selectedPlanHandoff.continuedSessionId
+										? `This session stopped after plan approval and continued in ${selectedPlanHandoff.continuedSessionId.slice(0, 14)}.`
+										: "This session stopped after plan approval and continued in a new session."}
+								</div>
+								{selectedPlanHandoff.continuedSessionPath && onOpenSession && (
+									<button
+										type="button"
+										onClick={() => onOpenSession(selectedPlanHandoff.continuedSessionPath)}
+										className="inline-flex items-center gap-1 rounded-md border border-emerald-500/30 px-2 py-1 text-xs text-emerald-300 hover:bg-emerald-500/10 transition-colors cursor-pointer"
+									>
+										Open linked session
+									</button>
+								)}
+							</div>
+						)}
 						<MarkdownContent className="text-zinc-200 text-sm leading-relaxed">
 							{event.data.text}
 						</MarkdownContent>
+						{selectedPlanHandoff && (
+							<>
+								<div className="flex items-center justify-between mt-4 mb-1.5">
+									<div className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Plan</div>
+									{renderCopyIconButton("plan-handoff-plan", selectedPlanHandoff.plan, "Copy plan")}
+								</div>
+								<MarkdownContent className="text-zinc-300 text-sm leading-relaxed">
+									{selectedPlanHandoff.plan}
+								</MarkdownContent>
+							</>
+						)}
 					</div>
 				)}
 

@@ -106,7 +106,7 @@ export function processMainEntries(
 	state.mainLogEntries.push(...entries)
 
 	// Convert to events
-	const events = parseEvents(entries, state.sessionId, null)
+	const events = parseEvents(entries, {sessionId: state.sessionId, agentId: null})
 
 	// Scan for newly discovered agent IDs
 	const newAgentIds: string[] = []
@@ -129,7 +129,7 @@ export function processAgentEntries(
 	agentId: string,
 	state: IncrementalParseState,
 ): Event[] {
-	return parseEvents(entries, state.sessionId, agentId)
+	return parseEvents(entries, {sessionId: state.sessionId, agentId})
 }
 
 /**

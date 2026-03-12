@@ -1,6 +1,6 @@
 import {useQueryState} from "nuqs"
-import {useCallback, useEffect, useMemo, useRef, useState} from "react"
 import type {PointerEvent as ReactPointerEvent} from "react"
+import {useCallback, useEffect, useMemo, useRef, useState} from "react"
 import {useHotkeys} from "react-hotkeys-hook"
 import type {Event} from "#types"
 import {SESSION_EVENT_TYPE} from "../../lib/event-catalog"
@@ -19,20 +19,20 @@ import {SessionPicker} from "./SessionPicker"
 import {SubagentDrilldown} from "./SubagentDrilldown"
 import {SubagentSectionView} from "./SubagentSectionView"
 import {matchesFilters} from "./session-view/filtering"
-import type {SubagentSection, TurnSection} from "./session-view/types"
+import {groupIntoTurns, groupTurnsIntoSections} from "./session-view/grouping"
+import {formatDateTime} from "./session-view/helpers"
 import {
 	clampPanelSize,
 	getPanelBreakpoint,
 	loadPanelSizesFromStorage,
-	resolvePanelSize,
-	savePanelSizesToStorage,
 	type PanelBreakpoint,
 	type PanelId,
 	type PersistedPanelSizes,
+	resolvePanelSize,
+	savePanelSizesToStorage,
 	updatePanelSizeForBreakpoint,
 } from "./session-view/panel-sizing"
-import {groupIntoTurns, groupTurnsIntoSections} from "./session-view/grouping"
-import {formatDateTime} from "./session-view/helpers"
+import type {SubagentSection, TurnSection} from "./session-view/types"
 import {TurnView} from "./TurnView"
 import {TurnWrapper} from "./TurnWrapper"
 
@@ -505,7 +505,7 @@ export function SessionView() {
 	const handleSelectSession = useCallback(
 		(path: string) => {
 			stopTailing()
-			setSessionPath(path)
+			void setSessionPath(path, {history: "push"})
 			setActiveTurnId(null)
 			setSelectedEvent(null)
 			setDrilldownAgentId(null)
@@ -904,6 +904,7 @@ export function SessionView() {
 								allEvents={sessionData.allEvents}
 								agents={agents}
 								sessionFilePath={resolvedSessionFilePath}
+								onOpenSession={handleSelectSession}
 							/>
 						</aside>
 					</>
@@ -955,6 +956,7 @@ export function SessionView() {
 							allEvents={sessionData.allEvents}
 							agents={agents}
 							sessionFilePath={resolvedSessionFilePath}
+							onOpenSession={handleSelectSession}
 						/>
 					</div>
 				</div>

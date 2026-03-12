@@ -9,6 +9,7 @@ export const CLAUDE_CONTENT_TYPE = {
 	THINKING: "thinking",
 	TOOL_USE: "tool_use",
 	TOOL_RESULT: "tool_result",
+	TOOL_REFERENCE: "tool_reference",
 } as const
 
 export const SESSION_EVENT_TYPE = {

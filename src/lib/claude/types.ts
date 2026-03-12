@@ -50,10 +50,18 @@ export const ImageContentSchema = z.object({
 	}),
 })
 
+export const ToolReferenceContentSchema = z.object({
+	type: z.literal(CLAUDE_CONTENT_TYPE.TOOL_REFERENCE),
+	tool_name: z.string(),
+})
+
 export const ToolResultContentSchema = z.object({
 	type: z.literal(CLAUDE_CONTENT_TYPE.TOOL_RESULT),
 	tool_use_id: z.string(),
-	content: z.union([z.string(), z.array(z.union([TextContentSchema, ImageContentSchema]))]),
+	content: z.union([
+		z.string(),
+		z.array(z.union([TextContentSchema, ImageContentSchema, ToolReferenceContentSchema])),
+	]),
 	is_error: z.boolean().optional(),
 })
 
@@ -123,6 +131,8 @@ export const LogEntrySchema = z.object({
 	parentUuid: z.string().nullable().optional(),
 	timestamp: z.string().optional(),
 	sessionId: z.string().optional(),
+	promptId: z.string().optional(),
+	planContent: z.string().optional(),
 	agentId: z.string().optional(),
 	isSidechain: z.boolean().optional(),
 	userType: z.string().optional(),
@@ -142,6 +152,7 @@ export type Usage = z.infer<typeof UsageSchema>
 export type TextContent = z.infer<typeof TextContentSchema>
 export type ThinkingContent = z.infer<typeof ThinkingContentSchema>
 export type ToolUseContent = z.infer<typeof ToolUseContentSchema>
+export type ToolReferenceContent = z.infer<typeof ToolReferenceContentSchema>
 export type ToolResultContent = z.infer<typeof ToolResultContentSchema>
 export type ImageContent = z.infer<typeof ImageContentSchema>
 export type MessageContent = z.infer<typeof MessageContentSchema>
@@ -153,10 +164,18 @@ export type ThinkingMetadata = z.infer<typeof ThinkingMetadataSchema>
 export type LogEntry = z.infer<typeof LogEntrySchema>
 
 // Processed event types for visualization
+export const PlanHandoffDataSchema = z.object({
+	plan: z.string(),
+	promptId: z.string().optional(),
+	continuedSessionId: z.string().optional(),
+	continuedSessionPath: z.string().optional(),
+})
+
 export const UserMessageDataSchema = z.object({
 	type: z.literal(SESSION_EVENT_TYPE.USER_MESSAGE),
 	text: z.string(),
 	model: z.string().optional(),
+	planHandoff: PlanHandoffDataSchema.optional(),
 })
 
 export const AssistantMessageDataSchema = z.object({
@@ -263,6 +282,7 @@ export const SessionDataSchema = z.object({
 })
 
 // TypeScript types inferred from schemas
+export type PlanHandoffData = z.infer<typeof PlanHandoffDataSchema>
 export type UserMessageData = z.infer<typeof UserMessageDataSchema>
 export type AssistantMessageData = z.infer<typeof AssistantMessageDataSchema>
 export type ToolUseData = z.infer<typeof ToolUseDataSchema>

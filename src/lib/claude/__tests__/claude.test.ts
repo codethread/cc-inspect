@@ -34,6 +34,16 @@ function makeReader(files: Record<string, string>): FileReader {
 		async exists(path: string) {
 			return path in files
 		},
+		async listDir(path: string) {
+			const prefix = `${path}/`
+			return [
+				...new Set(
+					Object.keys(files)
+						.filter((file) => file.startsWith(prefix))
+						.map((file) => file.slice(prefix.length).split("/")[0] as string),
+				),
+			]
+		},
 	}
 }
 
@@ -270,6 +280,10 @@ describe("Claude.parseSession", () => {
 			async exists(path: string) {
 				calls.push(`exists:${path}`)
 				return false
+			},
+			async listDir(path: string) {
+				calls.push(`listDir:${path}`)
+				return ["sess-001.jsonl"]
 			},
 		}
 

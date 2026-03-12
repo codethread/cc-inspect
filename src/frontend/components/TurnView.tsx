@@ -17,20 +17,45 @@ function UserMessageBlock({
 	onClick: () => void
 }) {
 	if (event.data.type !== SESSION_EVENT_TYPE.USER_MESSAGE) return null
+	const continuedSessionId = event.data.planHandoff?.continuedSessionId
+	const isPlanHandoff = Boolean(event.data.planHandoff)
 	return (
 		<button
 			type="button"
 			onClick={onClick}
-			className={`w-full text-left bg-sky-500/5 border rounded-xl px-5 py-4 transition-colors cursor-pointer ${
-				isActive ? "border-sky-400/40 ring-1 ring-sky-400/20" : "border-sky-500/15 hover:border-sky-500/30"
+			className={`w-full text-left border rounded-xl px-5 py-4 transition-colors cursor-pointer ${
+				isPlanHandoff
+					? isActive
+						? "bg-emerald-500/8 border-emerald-400/40 ring-1 ring-emerald-400/20"
+						: "bg-emerald-500/4 border-emerald-500/20 hover:border-emerald-500/35"
+					: isActive
+						? "bg-sky-500/5 border-sky-400/40 ring-1 ring-sky-400/20"
+						: "bg-sky-500/5 border-sky-500/15 hover:border-sky-500/30"
 			}`}
 			data-event-id={event.id}
 		>
 			<div className="flex items-center gap-2 mb-2">
-				<span className="text-xs font-semibold text-sky-400 uppercase tracking-wider">User</span>
+				<span
+					className={`text-xs font-semibold uppercase tracking-wider ${
+						isPlanHandoff ? "text-emerald-400" : "text-sky-400"
+					}`}
+				>
+					{isPlanHandoff ? "Plan Handoff" : "User"}
+				</span>
 				<span className="text-xs text-zinc-600">{formatTime(event.timestamp)}</span>
 			</div>
-			<div className="text-zinc-200 text-sm leading-relaxed line-clamp-3">{event.data.text}</div>
+			{isPlanHandoff ? (
+				<div className="space-y-2">
+					<div className="text-zinc-200 text-sm leading-relaxed">
+						{continuedSessionId
+							? `Plan accepted. Continued in session ${continuedSessionId.slice(0, 14)}.`
+							: "Plan accepted. Work continued in a new session."}
+					</div>
+					<div className="text-zinc-500 text-xs line-clamp-2">{event.data.planHandoff?.plan}</div>
+				</div>
+			) : (
+				<div className="text-zinc-200 text-sm leading-relaxed line-clamp-3">{event.data.text}</div>
+			)}
 		</button>
 	)
 }

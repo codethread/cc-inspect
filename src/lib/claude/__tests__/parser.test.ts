@@ -31,6 +31,16 @@ function makeReader(files: Record<string, string>): FileReader {
 		async exists(path: string) {
 			return path in files
 		},
+		async listDir(path: string) {
+			const prefix = `${path}/`
+			return [
+				...new Set(
+					Object.keys(files)
+						.filter((file) => file.startsWith(prefix))
+						.map((file) => file.slice(prefix.length).split("/")[0] as string),
+				),
+			]
+		},
 	}
 }
 
@@ -362,7 +372,7 @@ describe("extractAgentInfo", () => {
 describe("parseEvents", () => {
 	it("converts user message (string content) to user-message event", () => {
 		const entries: LogEntry[] = [makeUserMessage("hello world")]
-		const events = parseEvents(entries, "sess-1", null)
+		const events = parseEvents(entries, {sessionId: "sess-1", agentId: null})
 
 		expect(events).toHaveLength(1)
 		expect(events[0]?.type).toBe("user-message")
@@ -379,7 +389,7 @@ describe("parseEvents", () => {
 				},
 			}),
 		]
-		const events = parseEvents(entries, "sess-1", null)
+		const events = parseEvents(entries, {sessionId: "sess-1", agentId: null})
 
 		const userEvents = events.filter((e) => e.type === "user-message")
 		expect(userEvents).toHaveLength(1)
@@ -388,7 +398,7 @@ describe("parseEvents", () => {
 
 	it("converts tool_result content to tool-result event", () => {
 		const entries: LogEntry[] = [makeToolResult({toolUseId: "tu1", content: "file contents"})]
-		const events = parseEvents(entries, "sess-1", null)
+		const events = parseEvents(entries, {sessionId: "sess-1", agentId: null})
 
 		const toolResults = events.filter((e) => e.type === "tool-result")
 		expect(toolResults).toHaveLength(1)
@@ -403,7 +413,7 @@ describe("parseEvents", () => {
 
 	it("converts assistant text content to assistant-message event", () => {
 		const entries: LogEntry[] = [makeAssistantText("I can help!")]
-		const events = parseEvents(entries, "sess-1", null)
+		const events = parseEvents(entries, {sessionId: "sess-1", agentId: null})
 
 		expect(events).toHaveLength(1)
 		expect(events[0]?.type).toBe("assistant-message")
@@ -424,7 +434,7 @@ describe("parseEvents", () => {
 				},
 			}),
 		]
-		const events = parseEvents(entries, "sess-1", null)
+		const events = parseEvents(entries, {sessionId: "sess-1", agentId: null})
 
 		expect(events).toHaveLength(1)
 		expect(events[0]?.type).toBe("thinking")
@@ -435,7 +445,7 @@ describe("parseEvents", () => {
 		const entries: LogEntry[] = [
 			makeAssistantToolUse({toolName: "Read", toolId: "tu1", input: {file_path: "/test.txt"}}),
 		]
-		const events = parseEvents(entries, "sess-1", null)
+		const events = parseEvents(entries, {sessionId: "sess-1", agentId: null})
 
 		expect(events).toHaveLength(1)
 		expect(events[0]?.type).toBe("tool-use")
@@ -458,7 +468,7 @@ describe("parseEvents", () => {
 				input: {resume: "agent-xyz", description: "Continue"},
 			}),
 		]
-		const events = parseEvents(entries, "sess-1", null)
+		const events = parseEvents(entries, {sessionId: "sess-1", agentId: null})
 
 		const toolUse = events[0]
 		expect(toolUse?.data).toEqual({
@@ -479,7 +489,7 @@ describe("parseEvents", () => {
 			makeLogEntry({type: "queue-operation"}),
 			makeUserMessage("visible"),
 		]
-		const events = parseEvents(entries, "sess-1", null)
+		const events = parseEvents(entries, {sessionId: "sess-1", agentId: null})
 
 		expect(events).toHaveLength(1)
 		expect(events[0]?.type).toBe("user-message")
@@ -491,7 +501,7 @@ describe("parseEvents", () => {
 			makeLogEntry({type: "user", timestamp: undefined, message: {role: "user", content: "no ts"}}),
 			makeUserMessage("valid"),
 		]
-		const events = parseEvents(entries, "sess-1", null)
+		const events = parseEvents(entries, {sessionId: "sess-1", agentId: null})
 
 		expect(events).toHaveLength(1)
 		expect(events[0]?.data).toEqual({type: "user-message", text: "valid", model: undefined})
@@ -499,7 +509,7 @@ describe("parseEvents", () => {
 
 	it("handles summary entries", () => {
 		const entries: LogEntry[] = [makeSummary("Session complete")]
-		const events = parseEvents(entries, "sess-1", null)
+		const events = parseEvents(entries, {sessionId: "sess-1", agentId: null})
 
 		expect(events).toHaveLength(1)
 		expect(events[0]?.type).toBe("summary")
@@ -509,14 +519,14 @@ describe("parseEvents", () => {
 
 	it("uses agentId parameter when provided", () => {
 		const entries: LogEntry[] = [makeUserMessage("hello")]
-		const events = parseEvents(entries, "sess-1", "agent-x")
+		const events = parseEvents(entries, {sessionId: "sess-1", agentId: "agent-x"})
 
 		expect(events[0]?.agentId).toBe("agent-x")
 	})
 
 	it("falls back to sessionId for agentId when agentId param is null", () => {
 		const entries: LogEntry[] = [makeUserMessage("hello")]
-		const events = parseEvents(entries, "sess-1", null)
+		const events = parseEvents(entries, {sessionId: "sess-1", agentId: null})
 
 		expect(events[0]?.agentId).toBe("sess-1")
 	})
@@ -794,5 +804,109 @@ describe("parseSessionLogs", () => {
 		expect(child?.id).toBe("abc1234")
 		expect(child?.name).toBe("Refactor utils module")
 		expect(child?.events.length).toBeGreaterThan(0)
+	})
+
+	it("collapses native plan handoff into a linked user event", async () => {
+		const oldSessionContent = [
+			JSON.stringify({
+				type: "assistant",
+				uuid: "a1",
+				timestamp: "2026-03-12T05:41:12.443Z",
+				message: {
+					role: "assistant",
+					model: "claude-opus-4-6",
+					content: [{type: "text", text: "Now I have all the context needed. Let me write the plan."}],
+				},
+			}),
+			JSON.stringify({
+				type: "assistant",
+				uuid: "a2",
+				parentUuid: "a1",
+				timestamp: "2026-03-12T05:41:41.153Z",
+				message: {
+					role: "assistant",
+					model: "claude-opus-4-6",
+					content: [
+						{
+							type: "tool_use",
+							id: "tool-exit",
+							name: "ExitPlanMode",
+							input: {plan: "# Example plan\n\nDo the thing"},
+						},
+					],
+				},
+			}),
+			JSON.stringify({
+				type: "user",
+				uuid: "u1",
+				parentUuid: "a2",
+				timestamp: "2026-03-12T05:47:33.262Z",
+				promptId: "prompt-1",
+				message: {
+					role: "user",
+					content: [
+						{
+							type: "tool_result",
+							tool_use_id: "tool-exit",
+							content: "The user doesn't want to proceed with this tool use.",
+							is_error: true,
+						},
+					],
+				},
+				toolUseResult: "Error: The user doesn't want to proceed with this tool use.",
+			}),
+			JSON.stringify({
+				type: "user",
+				uuid: "u2",
+				parentUuid: "u1",
+				timestamp: "2026-03-12T05:47:33.263Z",
+				promptId: "prompt-1",
+				message: {
+					role: "user",
+					content: [{type: "text", text: "[Request interrupted by user for tool use]"}],
+				},
+			}),
+		].join("\n")
+
+		const newSessionContent = [
+			JSON.stringify({
+				type: "progress",
+				uuid: "p1",
+				timestamp: "2026-03-12T05:47:33.481Z",
+				data: {type: "hook_progress"},
+			}),
+			JSON.stringify({
+				type: "user",
+				uuid: "n1",
+				timestamp: "2026-03-12T05:47:33.482Z",
+				promptId: "prompt-1",
+				planContent: "# Example plan\n\nDo the thing",
+				message: {
+					role: "user",
+					content: "Implement the following plan:\n\n# Example plan\n\nDo the thing",
+				},
+			}),
+		].join("\n")
+
+		const reader = makeReader({
+			"/project/old.jsonl": oldSessionContent,
+			"/project/new.jsonl": newSessionContent,
+		})
+
+		const data = await parseSessionLogs("/project/old.jsonl", "/project/old/subagents", reader)
+
+		expect(data.allEvents).toHaveLength(2)
+		expect(data.allEvents.map((event) => event.type)).toEqual(["assistant-message", "user-message"])
+		expect(data.allEvents[1]?.data).toEqual({
+			type: "user-message",
+			text: "[Request interrupted by user for tool use]",
+			model: undefined,
+			planHandoff: {
+				plan: "# Example plan\n\nDo the thing",
+				promptId: "prompt-1",
+				continuedSessionId: "new",
+				continuedSessionPath: "/project/new.jsonl",
+			},
+		})
 	})
 })

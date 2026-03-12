@@ -1,5 +1,6 @@
 import type {AgentNode, Event} from "#types"
 import {SESSION_EVENT_TYPE} from "../../../lib/event-catalog"
+import {getPlanHandoffSummary} from "./helpers"
 import type {
 	MainTurnSection,
 	SingleEvent,
@@ -72,7 +73,7 @@ function buildAgentTurns(events: Event[], mainAgentId: string): Turn[] {
 				events: [event],
 				summary:
 					isUserMsg && event.data.type === SESSION_EVENT_TYPE.USER_MESSAGE
-						? event.data.text.slice(0, 80)
+						? (getPlanHandoffSummary(event) ?? event.data.text.slice(0, 80))
 						: isSpawn && event.data.type === SESSION_EVENT_TYPE.AGENT_SPAWN
 							? `Agent: ${event.data.description}`
 							: "",

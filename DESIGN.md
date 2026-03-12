@@ -99,6 +99,7 @@ Events are grouped into conversational **turns** per agent. A turn starts with a
 Within each turn, events are organized:
 
 - **User messages**: Rendered as plain text, truncated to 3 lines with `line-clamp-3`. Click to view full content in the detail panel.
+  Native Claude Code plan handoffs (`ExitPlanMode` accepted into a new session) render as a green-tinted "Plan Handoff" card instead of a generic interrupted user/error sequence. When the linked follow-up session can be resolved, the card offers an "Open session" action.
 - **Assistant messages**: Truncated to 3 lines. Click to view full content in the detail panel.
 - **Thinking blocks**: Shown as a muted italic single line. Click to view full content in the detail panel.
 - **Tool call groups**: Consecutive tool-use/tool-result events are grouped into an accordion (see below).
@@ -128,6 +129,7 @@ The right panel is always present:
   - A help popover next to `copy id` with an event-specific `jq` command targeting the current session file, plus a copy action for that command
   - Copy icons next to each displayed detail block (message markdown, tool JSON input, tool output, summaries, prompts, etc.) so each block can be copied independently
   - Full content rendered as markdown for messages, JSON for tool input, raw text for tool output
+  - Plan-handoff events show the accepted plan plus an "Open linked session" action when the next session can be identified
   - Markdown tables render in a dark neo-terminal style with subtle cyan accents, alternating row shading, and hover highlighting to match the timeline/detail visual language
   - For tool-use events: automatically shows the linked tool-result below
   - For tool-result events: shows the linked tool-use input above

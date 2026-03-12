@@ -41,6 +41,12 @@ export function formatProjectName(directory: string): string {
 	return parts.slice(-2).join("/")
 }
 
+export function getPlanHandoffSummary(event: Event): string | null {
+	if (event.data.type !== SESSION_EVENT_TYPE.USER_MESSAGE || !event.data.planHandoff) return null
+	const target = event.data.planHandoff.continuedSessionId?.slice(0, 14)
+	return target ? `Plan continued in ${target}` : "Plan accepted, continued in a new session"
+}
+
 function getToolUseSummary(event: Event): string {
 	if (event.data.type !== SESSION_EVENT_TYPE.TOOL_USE) return ""
 	const {toolName, description, input} = event.data
@@ -89,7 +95,7 @@ function getToolResultSummary(event: Event): string {
 export function getEventSummary(event: Event): string {
 	switch (event.data.type) {
 		case SESSION_EVENT_TYPE.USER_MESSAGE:
-			return event.data.text.slice(0, 120)
+			return getPlanHandoffSummary(event) ?? event.data.text.slice(0, 120)
 		case SESSION_EVENT_TYPE.ASSISTANT_MESSAGE:
 			return event.data.text.slice(0, 120)
 		case SESSION_EVENT_TYPE.TOOL_USE:
@@ -150,6 +156,10 @@ export function isAgentComplete(agentId: string, allEvents: Event[]): boolean {
 
 export function getEventSearchableText(event: Event): string {
 	const parts = [getEventSummary(event), event.agentName ?? "", event.type]
+	if (event.data.type === SESSION_EVENT_TYPE.USER_MESSAGE && event.data.planHandoff) {
+		parts.push(event.data.planHandoff.plan)
+		if (event.data.planHandoff.continuedSessionId) parts.push(event.data.planHandoff.continuedSessionId)
+	}
 	if (event.data.type === SESSION_EVENT_TYPE.TOOL_USE) {
 		for (const value of Object.values(event.data.input)) {
 			if (typeof value === "string") parts.push(value)

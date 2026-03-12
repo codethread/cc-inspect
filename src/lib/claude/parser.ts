@@ -1,6 +1,6 @@
 // Parser for Claude Code session logs
 
-import {join} from "node:path"
+import {dirname, join} from "node:path"
 import {CLAUDE_CONTENT_TYPE, CLAUDE_LOG_ENTRY_TYPE, SESSION_EVENT_TYPE} from "../event-catalog"
 import {ParseError} from "./errors"
 import type {
@@ -8,6 +8,7 @@ import type {
 	Event,
 	EventType,
 	LogEntry,
+	PlanHandoffData,
 	SessionData,
 	TextContent,
 	ThinkingContent,
@@ -21,6 +22,7 @@ import {LogEntrySchema} from "./types"
 export interface FileReader {
 	readText(path: string): Promise<string>
 	exists(path: string): Promise<boolean>
+	listDir(path: string): Promise<string[]>
 }
 
 /** Default implementation using Bun.file */
@@ -30,6 +32,9 @@ export const bunFileReader: FileReader = {
 	},
 	async exists(path: string) {
 		return Bun.file(path).exists()
+	},
+	async listDir(path: string) {
+		return Array.fromAsync(new Bun.Glob("*").scan(path))
 	},
 }
 
@@ -42,12 +47,20 @@ export async function parseSessionLogs(
 
 	// Parse main session log
 	const mainLogEntries = await parseJsonlFile(sessionFilePath, reader)
+	const planHandoffs = await detectPlanHandoffs(sessionFilePath, mainLogEntries, reader)
 
 	// Find sub-agent logs that are referenced in this session
 	const agentLogs = await findAgentLogs(sessionAgentDir, mainLogEntries, reader)
 
 	// Build agent tree
-	const mainAgent = await buildAgentTree({sessionId, mainLogEntries, agentLogs, sessionFilePath, reader})
+	const mainAgent = await buildAgentTree({
+		sessionId,
+		mainLogEntries,
+		agentLogs,
+		sessionFilePath,
+		reader,
+		planHandoffs,
+	})
 
 	// Extract all events chronologically
 	const allEvents = extractAllEvents(mainAgent)
@@ -137,6 +150,170 @@ export function normalizeToolUseResult(toolUseResult: LogEntry["toolUseResult"])
 	return Array.isArray(toolUseResult) ? toolUseResult[0] : toolUseResult
 }
 
+interface DetectedPlanHandoff extends PlanHandoffData {
+	exitPlanEntryId: string
+	rejectionEntryId?: string
+	interruptionEntryId: string
+}
+
+function extractTextParts(entry: LogEntry): string[] {
+	if (!entry.message) return []
+	if (typeof entry.message.content === "string") return [entry.message.content]
+	return entry.message.content
+		.filter((item) => item.type === CLAUDE_CONTENT_TYPE.TEXT)
+		.map((item) => (item as TextContent).text)
+}
+
+function extractExitPlanToolUse(entry: LogEntry): ToolUseContent | undefined {
+	if (
+		entry.type !== CLAUDE_LOG_ENTRY_TYPE.ASSISTANT ||
+		!entry.message ||
+		!Array.isArray(entry.message.content)
+	) {
+		return undefined
+	}
+
+	return entry.message.content.find(
+		(item): item is ToolUseContent =>
+			item.type === CLAUDE_CONTENT_TYPE.TOOL_USE && item.name === "ExitPlanMode",
+	)
+}
+
+function extractMatchingToolResult(entry: LogEntry, toolUseId: string): ToolResultContent | undefined {
+	if (entry.type !== CLAUDE_LOG_ENTRY_TYPE.USER || !entry.message || !Array.isArray(entry.message.content)) {
+		return undefined
+	}
+
+	return entry.message.content.find(
+		(item): item is ToolResultContent =>
+			item.type === CLAUDE_CONTENT_TYPE.TOOL_RESULT && item.tool_use_id === toolUseId,
+	)
+}
+
+function isInterruptedToolUseMessage(entry: LogEntry): boolean {
+	return extractTextParts(entry).some((text) => text.startsWith("[Request interrupted by user"))
+}
+
+function extractPlanContentFromContinuation(entry: LogEntry): string | undefined {
+	if (entry.planContent) return entry.planContent
+	if (entry.type !== CLAUDE_LOG_ENTRY_TYPE.USER || !entry.message) return undefined
+	if (typeof entry.message.content !== "string") return undefined
+
+	const prefix = "Implement the following plan:\n\n"
+	return entry.message.content.startsWith(prefix) ? entry.message.content.slice(prefix.length) : undefined
+}
+
+async function detectPlanHandoffs(
+	sessionFilePath: string,
+	mainLogEntries: LogEntry[],
+	reader: FileReader,
+): Promise<Map<string, DetectedPlanHandoff>> {
+	const candidates: DetectedPlanHandoff[] = []
+
+	for (let i = 0; i < mainLogEntries.length; i++) {
+		const entry = mainLogEntries[i]
+		if (!entry?.uuid) continue
+
+		const exitPlanToolUse = extractExitPlanToolUse(entry)
+		const plan = typeof exitPlanToolUse?.input.plan === "string" ? exitPlanToolUse.input.plan : undefined
+		if (!exitPlanToolUse || !plan) continue
+
+		let rejectionEntryId: string | undefined
+		let interruptionEntryId: string | undefined
+		let promptId: string | undefined
+
+		for (let j = i + 1; j < mainLogEntries.length; j++) {
+			const next = mainLogEntries[j]
+			if (!next?.uuid) continue
+
+			const matchingResult = extractMatchingToolResult(next, exitPlanToolUse.id)
+			if (matchingResult?.is_error) {
+				rejectionEntryId = next.uuid
+				promptId ??= next.promptId
+				continue
+			}
+
+			if (isInterruptedToolUseMessage(next)) {
+				interruptionEntryId = next.uuid
+				promptId ??= next.promptId
+				break
+			}
+		}
+
+		if (!interruptionEntryId) continue
+
+		candidates.push({
+			exitPlanEntryId: entry.uuid,
+			rejectionEntryId,
+			interruptionEntryId,
+			plan,
+			promptId,
+		})
+	}
+
+	if (candidates.length === 0) return new Map()
+
+	const directory = dirname(sessionFilePath)
+	const files = await reader.listDir(directory)
+	const siblingSessionPaths = files
+		.filter((file) => file.endsWith(".jsonl") && !file.startsWith("agent-"))
+		.map((file) => join(directory, file))
+		.filter((path) => path !== sessionFilePath)
+
+	const matches = new Map<string, {sessionId: string; sessionFilePath: string; timestamp: number}>()
+
+	for (const siblingSessionPath of siblingSessionPaths) {
+		let siblingEntries: LogEntry[]
+		try {
+			siblingEntries = await parseJsonlFile(siblingSessionPath, reader)
+		} catch {
+			continue
+		}
+
+		const continuationEntry = siblingEntries.find((entry) => {
+			const planContent = extractPlanContentFromContinuation(entry)
+			if (!planContent) return false
+			return candidates.some(
+				(candidate) =>
+					Boolean(candidate.promptId) &&
+					candidate.promptId === entry.promptId &&
+					candidate.plan === planContent,
+			)
+		})
+
+		if (!continuationEntry?.timestamp) continue
+		const planContent = extractPlanContentFromContinuation(continuationEntry)
+		if (!planContent) continue
+
+		const candidate = candidates.find(
+			(item) =>
+				Boolean(item.promptId) && item.promptId === continuationEntry.promptId && item.plan === planContent,
+		)
+		if (!candidate) continue
+
+		const timestamp = new Date(continuationEntry.timestamp).getTime()
+		const existing = matches.get(candidate.interruptionEntryId)
+		if (existing && existing.timestamp <= timestamp) continue
+
+		matches.set(candidate.interruptionEntryId, {
+			sessionId: extractSessionId(siblingSessionPath),
+			sessionFilePath: siblingSessionPath,
+			timestamp,
+		})
+	}
+
+	return new Map(
+		candidates.map((candidate) => [
+			candidate.interruptionEntryId,
+			{
+				...candidate,
+				continuedSessionId: matches.get(candidate.interruptionEntryId)?.sessionId,
+				continuedSessionPath: matches.get(candidate.interruptionEntryId)?.sessionFilePath,
+			},
+		]),
+	)
+}
+
 export async function findAgentLogs(
 	sessionAgentDir: string,
 	mainLogEntries: LogEntry[],
@@ -204,8 +381,9 @@ async function buildAgentTree(options: {
 	agentLogs: Map<string, string>
 	sessionFilePath: string
 	reader: FileReader
+	planHandoffs: Map<string, DetectedPlanHandoff>
 }): Promise<AgentNode> {
-	const {sessionId, mainLogEntries, agentLogs, sessionFilePath, reader} = options
+	const {sessionId, mainLogEntries, agentLogs, sessionFilePath, reader, planHandoffs} = options
 
 	// Extract model from the first assistant message
 	const mainModel = extractMainAgentModel(mainLogEntries)
@@ -217,7 +395,7 @@ async function buildAgentTree(options: {
 		model: mainModel,
 		parent: null,
 		children: [],
-		events: parseEvents(mainLogEntries, sessionId, null),
+		events: parseEvents(mainLogEntries, {sessionId, agentId: null, planHandoffs}),
 		logPath: sessionFilePath,
 	}
 
@@ -230,7 +408,7 @@ async function buildAgentTree(options: {
 		const agentModel = extractMainAgentModel(agentEntries)
 
 		// Parse events from agent file
-		const agentFileEvents = parseEvents(agentEntries, sessionId, agentId)
+		const agentFileEvents = parseEvents(agentEntries, {sessionId, agentId})
 
 		// Also parse events from session log that belong to this agent (for resumed agents)
 		const sessionAgentEvents = parseSessionEventsForAgent(mainLogEntries, sessionId, agentId)
@@ -372,7 +550,11 @@ export function parseSessionEventsForAgent(
 							output = toolResult.content
 						} else if (Array.isArray(toolResult.content)) {
 							output = toolResult.content
-								.map((c) => (c.type === CLAUDE_CONTENT_TYPE.TEXT ? c.text : "[Image]"))
+								.map((c) => {
+									if (c.type === CLAUDE_CONTENT_TYPE.TEXT) return c.text
+									if (c.type === CLAUDE_CONTENT_TYPE.TOOL_REFERENCE) return `[Tool: ${c.tool_name}]`
+									return "[Image]"
+								})
 								.join("\n")
 						}
 
@@ -401,10 +583,27 @@ export function parseSessionEventsForAgent(
 	return events
 }
 
-export function parseEvents(logEntries: LogEntry[], sessionId: string, agentId: string | null): Event[] {
+export function parseEvents(
+	logEntries: LogEntry[],
+	options: {
+		sessionId: string
+		agentId: string | null
+		planHandoffs?: Map<string, DetectedPlanHandoff>
+	},
+): Event[] {
 	const events: Event[] = []
+	const {sessionId, agentId, planHandoffs} = options
+	const handoffByEntryId = planHandoffs ?? new Map<string, DetectedPlanHandoff>()
+	const skippedEntryIds = new Set<string>()
+
+	for (const handoff of handoffByEntryId.values()) {
+		skippedEntryIds.add(handoff.exitPlanEntryId)
+		if (handoff.rejectionEntryId) skippedEntryIds.add(handoff.rejectionEntryId)
+	}
 
 	for (const entry of logEntries) {
+		if (entry.uuid && skippedEntryIds.has(entry.uuid)) continue
+
 		// Skip unknown log entry types (e.g., "queue-operation")
 		if (
 			entry.type !== CLAUDE_LOG_ENTRY_TYPE.SUMMARY &&
@@ -455,6 +654,7 @@ export function parseEvents(logEntries: LogEntry[], sessionId: string, agentId: 
 		// Handle user messages
 		if (entry.type === CLAUDE_LOG_ENTRY_TYPE.USER && entry.message) {
 			const content = entry.message.content
+			const planHandoff = entry.uuid ? handoffByEntryId.get(entry.uuid) : undefined
 
 			// Check if it's a tool result
 			if (Array.isArray(content)) {
@@ -467,7 +667,11 @@ export function parseEvents(logEntries: LogEntry[], sessionId: string, agentId: 
 							output = toolResult.content
 						} else if (Array.isArray(toolResult.content)) {
 							output = toolResult.content
-								.map((c) => (c.type === CLAUDE_CONTENT_TYPE.TEXT ? c.text : "[Image]"))
+								.map((c) => {
+									if (c.type === CLAUDE_CONTENT_TYPE.TEXT) return c.text
+									if (c.type === CLAUDE_CONTENT_TYPE.TOOL_REFERENCE) return `[Tool: ${c.tool_name}]`
+									return "[Image]"
+								})
 								.join("\n")
 						}
 
@@ -496,6 +700,14 @@ export function parseEvents(logEntries: LogEntry[], sessionId: string, agentId: 
 							type: SESSION_EVENT_TYPE.USER_MESSAGE,
 							text: textParts.join("\n"),
 							model: entry.message.model,
+							planHandoff: planHandoff
+								? {
+										plan: planHandoff.plan,
+										promptId: planHandoff.promptId,
+										continuedSessionId: planHandoff.continuedSessionId,
+										continuedSessionPath: planHandoff.continuedSessionPath,
+									}
+								: undefined,
 						},
 					})
 				}
@@ -507,6 +719,14 @@ export function parseEvents(logEntries: LogEntry[], sessionId: string, agentId: 
 						type: SESSION_EVENT_TYPE.USER_MESSAGE,
 						text: content,
 						model: entry.message.model,
+						planHandoff: planHandoff
+							? {
+									plan: planHandoff.plan,
+									promptId: planHandoff.promptId,
+									continuedSessionId: planHandoff.continuedSessionId,
+									continuedSessionPath: planHandoff.continuedSessionPath,
+								}
+							: undefined,
 					},
 				})
 			}
