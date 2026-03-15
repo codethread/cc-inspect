@@ -306,5 +306,6 @@ export const SessionHandleSchema = z.object({
 	id: z.string(),
 	sessionFilePath: z.string(),
 	sessionAgentDir: z.string(),
+	customTitle: z.string().optional(),
 })
 export type SessionHandle = z.infer<typeof SessionHandleSchema>

@@ -59,11 +59,13 @@ export class Claude {
 				const filePath = join(project.path, file)
 				const stats = await stat(filePath)
 				const sessionId = file.replace(".jsonl", "")
+				const customTitle = await this.extractCustomTitle(filePath)
 				return {
 					handle: {
 						id: sessionId,
 						sessionFilePath: filePath,
 						sessionAgentDir: join(project.path, sessionId, "subagents"),
+						...(customTitle && {customTitle}),
 					} satisfies SessionHandle,
 					mtime: stats.mtime.getTime(),
 				}
@@ -74,6 +76,28 @@ export class Claude {
 		sessionsWithMtime.sort((a, b) => b.mtime - a.mtime)
 
 		return sessionsWithMtime.map((s) => s.handle)
+	}
+
+	/** Extract the last custom-title from a session JSONL file, if present */
+	private async extractCustomTitle(filePath: string): Promise<string | undefined> {
+		try {
+			const text = await this.reader.readText(filePath)
+			// Fast substring search — avoid splitting the entire file into lines
+			const needle = '"custom-title"'
+			const idx = text.lastIndexOf(needle)
+			if (idx === -1) return undefined
+			// Walk back to line start, forward to line end
+			const lineStart = text.lastIndexOf("\n", idx) + 1
+			const lineEnd = text.indexOf("\n", idx)
+			const line = text.slice(lineStart, lineEnd === -1 ? undefined : lineEnd)
+			const parsed = JSON.parse(line)
+			if (parsed.type === "custom-title" && parsed.customTitle) {
+				return parsed.customTitle
+			}
+			return undefined
+		} catch {
+			return undefined
+		}
 	}
 
 	/** Parse a session into a full agent tree with chronological events */

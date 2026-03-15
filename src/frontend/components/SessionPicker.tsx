@@ -17,6 +17,7 @@ export function SessionPicker({
 	const {open, dir, setOpen, setDir} = usePickerStore()
 	const {data: directories = []} = useDirectories()
 	const {data: sessions = [], isLoading} = useSessions(dir)
+	const activeSession = sessions.find((s) => s.sessionFilePath === sessionPath)
 
 	// Derive the active project directory from the current session path on initial load
 	useEffect(() => {
@@ -45,6 +46,11 @@ export function SessionPicker({
 						<span className="flex items-center gap-2">
 							{dir && <span className="text-xs text-zinc-500">{formatProjectName(dir)}</span>}
 							<span className="font-mono text-xs">{sessionData.sessionId.slice(0, 14)}</span>
+							{activeSession?.customTitle && (
+								<span className="text-xs text-zinc-400 truncate max-w-40" title={activeSession.customTitle}>
+									{activeSession.customTitle}
+								</span>
+							)}
 						</span>
 					) : (
 						<span>Open session</span>
@@ -91,6 +97,11 @@ export function SessionPicker({
 							}`}
 						>
 							<span className="font-mono text-xs text-zinc-500">{s.id.slice(0, 14)}</span>
+							{s.customTitle && (
+								<span className="ml-2 text-xs text-zinc-400 truncate" title={s.customTitle}>
+									{s.customTitle.length > 30 ? `${s.customTitle.slice(0, 30)}…` : s.customTitle}
+								</span>
+							)}
 						</button>
 					))}
 				</div>
