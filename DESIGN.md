@@ -10,7 +10,7 @@ Three-column layout filling the viewport:
 2. **Timeline** (center, flexible, max-width ~768px centered) — Grouped event stream with progressive disclosure
 3. **Detail panel** (right, always visible, resizable) — Full event details for the selected event
 
-A compact header bar at the top contains the session picker, event count, outline toggle, error filter toggle, search button, tool-collapse toggle, filter drawer trigger, and keyboard shortcuts config button.
+A compact header bar at the top contains the session picker, event count, error filter toggle, search button, outline toggle, filter drawer trigger, and keyboard shortcuts config button.
 
 ### Mobile layout (<768px viewport)
 
@@ -86,7 +86,9 @@ When a session includes sub-agents (spawned via the Task tool), their events are
 Each subagent section:
 - Has a **coloured header** showing the agent's description (from the Task tool call), falling back to name, subagentType, then truncated ID
 - Is **indented** with a left margin and a rounded border in the agent's colour
-- Contains all turns belonging to that agent
+- Is **collapsed by default** with an expand/collapse chevron toggle. The global **expand agents** toggle in the filter drawer controls the default state.
+- Has a **drilldown button** (expand icon) that opens a full-width drilldown view scoped to that agent (see Subagent drilldown below)
+- When expanded, contains all turns belonging to that agent
 
 **Ordering**: subagent sections are interleaved chronologically with main-agent turns. The main agent's turn is split just before it resumes after receiving the subagent's result, so the section appears between the Task tool-calls and the main agent's continuation. Parallel subagents appear in the order their events start.
 
@@ -112,11 +114,12 @@ Consecutive tool-use/tool-result events within a turn are grouped into a collaps
 
 - **Collapsed header**: Shows "N tool calls: Read, Bash, Edit" with a chevron. If any tool call failed, the header shows a red dot, red border, failure count in red, and "N failed" text.
 - **Expanded state**: Each tool call appears as a compact row showing tool name, a contextual summary (Read → file path, Bash → command, Grep → pattern, etc.), and success/error status. Failed rows get a red left border, red background tint, and red tool name.
-- The global **collapse/expand all** button in the header sets the default state for all accordions at once.
+- The global **expand tool calls** toggle in the filter drawer sets the default state for all accordions at once. Default: collapsed.
 - **Clicking a tool row**: Opens that event's full details in the right panel, including both the tool input and the linked tool result.
 - Empty tool-call accordions are never rendered; if filtering removes all tool-use rows from a run, that run is omitted from the timeline.
+- A keyboard shortcut (`⌘⇧T`) toggles the global tool expansion state.
 
-The global tool-call expanded/collapsed preference is persisted in `localStorage` under `cc-inspect-ui`.
+The global tool-call and agent expanded/collapsed preferences are persisted in `localStorage` under `cc-inspect-ui`.
 
 ### Detail panel (always visible)
 
@@ -158,6 +161,7 @@ When the user clicks an event, its ID is "pinned". If the user then changes filt
 
 A slide-out filter drawer (triggered from the header) provides:
 
+- **Display toggles** — control default expanded/collapsed state for tool call accordions and agent sections. Both default to collapsed. Changes persist to `localStorage`.
 - **Text search** — matches against event summaries, agent names, event types, and tool input values (bash commands, file paths, grep patterns, etc.)
 - **Event type toggles** — include (focus) or exclude (hide) specific event types independently
 - **Agent selection** — filter events to specific agents
@@ -260,20 +264,19 @@ During tailing, subagent sections render differently based on completion state:
 - **Label resolution before tool_result arrives**: agent metadata is not available until the task completes. The label is inferred from the pending Task tool_use descriptions in `allEvents` (matched positionally — the Nth stale agent maps to the Nth unmatched Task tool_use, ordered chronologically). Falls back to "Agent" if no match can be made.
 
 **Completed agents** (TOOL_RESULT exists):
-- Collapsed header with coloured dot, agent label, emerald checkmark, and expand chevron
-- Clicking the chevron expands inline, showing all turns (same as static rendering)
-
-**Non-tailing / page refresh**: all subagent sections render fully expanded inline (current behaviour unchanged).
+- Collapsed header with coloured dot, agent label, emerald checkmark, drilldown button, and expand chevron
+- Clicking the chevron expands inline, showing all turns
+- Clicking the drilldown button opens the full drilldown view
 
 ### Subagent drilldown view
 
-When drilling into an in-progress subagent, the main timeline is replaced by:
+Available in both live tailing and static modes. Clicking the drilldown button on any subagent section replaces the main timeline with:
 
-- **Breadcrumb bar**: "Main Agent › [agent label]". Clicking "Main Agent" returns to the main timeline.
+- **Breadcrumb bar**: "Main Agent › [agent label]". Clicking "Main Agent" returns to the main timeline at the same scroll position.
 - **Agent timeline**: events filtered to the target agent, grouped into turns, rendered with `TurnView`.
 - **No outline sidebar or filter drawer** in drilldown mode.
-- **Completion indicator**: spinner while in-progress, checkmark when complete. The user stays in drilldown when the agent completes.
-- Auto-scroll and new event highlights work the same as in the main timeline.
+- **Completion indicator** (tailing only): spinner while in-progress, checkmark when complete. The user stays in drilldown when the agent completes.
+- Auto-scroll and new event highlights work the same as in the main timeline (tailing only).
 
 ### CLI activation
 

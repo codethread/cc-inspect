@@ -1,6 +1,7 @@
 import type {AgentNode, EventType} from "#types"
 import {SESSION_EVENT_TYPE} from "../../lib/event-catalog"
 import {useFilterStore} from "../stores/filter-store"
+import {useUIStore} from "../stores/ui-store"
 import {getAgentColorSet} from "./session-view/agent-colors"
 import {EVENT_TYPES} from "./session-view/helpers"
 import {Sheet, SheetContent} from "./ui/sheet"
@@ -28,6 +29,11 @@ export function FilterDrawer({
 		setAgentFilter,
 		setErrorsOnly,
 	} = useFilterStore()
+
+	const allToolsExpanded = useUIStore((s) => s.allToolsExpanded)
+	const setAllToolsExpanded = useUIStore((s) => s.setAllToolsExpanded)
+	const allAgentsExpanded = useUIStore((s) => s.allAgentsExpanded)
+	const setAllAgentsExpanded = useUIStore((s) => s.setAllAgentsExpanded)
 
 	const toggleAgent = (id: string) => {
 		const next = new Set(agentFilter)
@@ -71,6 +77,53 @@ export function FilterDrawer({
 					</button>
 				</div>
 				<div className="flex-1 overflow-y-auto p-4 space-y-6">
+					{/* Display toggles */}
+					<div>
+						<span className="block text-xs font-medium text-zinc-400 mb-2">Display</span>
+						<div className="space-y-1">
+							<button
+								type="button"
+								onClick={() => setAllToolsExpanded(!allToolsExpanded)}
+								className={`w-full text-left px-3 py-2 rounded-lg text-sm flex items-center justify-between transition-colors cursor-pointer ${
+									allToolsExpanded
+										? "bg-zinc-800 text-zinc-200"
+										: "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
+								}`}
+							>
+								<span>Expand tool calls</span>
+								<svg
+									className={`w-3.5 h-3.5 transition-transform ${allToolsExpanded ? "rotate-180" : ""}`}
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									aria-hidden="true"
+								>
+									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+								</svg>
+							</button>
+							<button
+								type="button"
+								onClick={() => setAllAgentsExpanded(!allAgentsExpanded)}
+								className={`w-full text-left px-3 py-2 rounded-lg text-sm flex items-center justify-between transition-colors cursor-pointer ${
+									allAgentsExpanded
+										? "bg-zinc-800 text-zinc-200"
+										: "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
+								}`}
+							>
+								<span>Expand agents</span>
+								<svg
+									className={`w-3.5 h-3.5 transition-transform ${allAgentsExpanded ? "rotate-180" : ""}`}
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									aria-hidden="true"
+								>
+									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+								</svg>
+							</button>
+						</div>
+					</div>
+
 					<label className="block">
 						<span className="block text-xs font-medium text-zinc-400 mb-1.5">Search</span>
 						<input

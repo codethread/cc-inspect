@@ -1,5 +1,4 @@
 import type {AgentNode, Event, SessionData} from "#types"
-import {useUIStore} from "../stores/ui-store"
 import {getAgentColorSet} from "./session-view/agent-colors"
 import {groupIntoTurns} from "./session-view/grouping"
 import {getPendingTaskDescriptions, isAgentComplete} from "./session-view/helpers"
@@ -13,6 +12,7 @@ export function SubagentDrilldown({
 	selectedEventId,
 	onSelectEvent,
 	onTurnVisible,
+	onBack,
 	defaultToolsExpanded,
 	isNewEvent,
 }: {
@@ -22,10 +22,10 @@ export function SubagentDrilldown({
 	selectedEventId: string | null
 	onSelectEvent: (event: Event) => void
 	onTurnVisible: (id: string) => void
+	onBack: () => void
 	defaultToolsExpanded: boolean
 	isNewEvent: (eventId: string) => boolean
 }) {
-	const setDrilldownAgentId = useUIStore((s) => s.setDrilldownAgentId)
 
 	const colors = getAgentColorSet(agents, agentId)
 	const agentNode = agents.find((a) => a.id === agentId) ?? null
@@ -55,7 +55,7 @@ export function SubagentDrilldown({
 			<div className="flex items-center gap-2 text-sm">
 				<button
 					type="button"
-					onClick={() => setDrilldownAgentId(null)}
+					onClick={onBack}
 					className="text-zinc-400 hover:text-zinc-100 transition-colors cursor-pointer"
 				>
 					Main Agent

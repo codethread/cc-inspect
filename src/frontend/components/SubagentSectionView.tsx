@@ -1,4 +1,4 @@
-import {useState} from "react"
+import {useEffect, useState} from "react"
 import type {AgentNode, Event} from "#types"
 import {getAgentColorSet} from "./session-view/agent-colors"
 import {getPendingTaskDescriptions, isAgentComplete} from "./session-view/helpers"
@@ -13,7 +13,8 @@ export function SubagentSectionView({
 	selectedEventId,
 	onSelectEvent,
 	onTurnVisible,
-	defaultToolsExpanded = true,
+	defaultToolsExpanded = false,
+	defaultAgentsExpanded = false,
 	isTailing = false,
 	onDrilldown,
 }: {
@@ -24,6 +25,7 @@ export function SubagentSectionView({
 	onSelectEvent: (event: Event) => void
 	onTurnVisible: (id: string) => void
 	defaultToolsExpanded?: boolean
+	defaultAgentsExpanded?: boolean
 	isTailing?: boolean
 	onDrilldown?: (agentId: string) => void
 }) {
@@ -45,8 +47,12 @@ export function SubagentSectionView({
 		[agent?.description, resolvedName, agent?.subagentType, pendingDescription].find((s) => s?.trim()) ??
 		"Agent"
 
-	// Transient expanded state — only relevant in tailing completed-agent mode
-	const [isExpanded, setIsExpanded] = useState(false)
+	const [isExpanded, setIsExpanded] = useState(defaultAgentsExpanded)
+
+	// Sync local expanded state when global toggle changes
+	useEffect(() => {
+		setIsExpanded(defaultAgentsExpanded)
+	}, [defaultAgentsExpanded])
 
 	if (isTailing) {
 		const isComplete = isAgentComplete(section.agentId, allEvents)
@@ -97,10 +103,27 @@ export function SubagentSectionView({
 					>
 						<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
 					</svg>
+					{/* Drilldown button */}
+					<button
+						type="button"
+						onClick={() => onDrilldown?.(section.agentId)}
+						className="ml-auto p-0.5 rounded transition-colors cursor-pointer text-zinc-500 hover:text-zinc-300"
+						title="Open agent view"
+					>
+						<svg
+							className="w-3.5 h-3.5"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							aria-hidden="true"
+						>
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+						</svg>
+					</button>
 					<button
 						type="button"
 						onClick={() => setIsExpanded((v) => !v)}
-						className={`ml-auto p-0.5 rounded transition-colors cursor-pointer text-zinc-500 hover:text-zinc-300`}
+						className="p-0.5 rounded transition-colors cursor-pointer text-zinc-500 hover:text-zinc-300"
 						title={isExpanded ? "Collapse" : "Expand"}
 					>
 						<svg
@@ -136,30 +159,65 @@ export function SubagentSectionView({
 		)
 	}
 
-	// Static (non-tailing) mode: render all turns inline, unchanged
+	// Static (non-tailing) mode: collapsible with drilldown
 	return (
-		<div className={`ml-3 pl-4 border rounded-xl py-4 pr-4 ${colors.bg} ${colors.border}`}>
-			{/* Subagent header */}
-			<div className="flex items-center gap-2 mb-4">
+		<div className={`ml-3 pl-4 border rounded-xl py-3 pr-4 ${colors.bg} ${colors.border}`}>
+			<div className="flex items-center gap-2">
 				<span className="w-2 h-2 rounded-full flex-shrink-0" style={{backgroundColor: colors.dot}} />
 				<span className={`text-xs font-semibold uppercase tracking-wide ${colors.text}`}>{label}</span>
+				{/* Drilldown button */}
+				<button
+					type="button"
+					onClick={() => onDrilldown?.(section.agentId)}
+					className="ml-auto p-0.5 rounded transition-colors cursor-pointer text-zinc-500 hover:text-zinc-300"
+					title="Open agent view"
+				>
+					<svg
+						className="w-3.5 h-3.5"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						aria-hidden="true"
+					>
+						<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+					</svg>
+				</button>
+				{/* Expand/collapse toggle */}
+				<button
+					type="button"
+					onClick={() => setIsExpanded((v) => !v)}
+					className="p-0.5 rounded transition-colors cursor-pointer text-zinc-500 hover:text-zinc-300"
+					title={isExpanded ? "Collapse" : "Expand"}
+				>
+					<svg
+						className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						aria-hidden="true"
+					>
+						<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+					</svg>
+				</button>
 			</div>
 
-			<div className="space-y-8">
-				{section.turns.map((turn) => (
-					<TurnWrapper key={turn.id} turnId={turn.id} onVisible={onTurnVisible}>
-						<TurnView
-							turn={turn}
-							agents={agents}
-							allEvents={allEvents}
-							selectedEventId={selectedEventId}
-							onSelectEvent={onSelectEvent}
-							hideAgentLabel
-							defaultToolsExpanded={defaultToolsExpanded}
-						/>
-					</TurnWrapper>
-				))}
-			</div>
+			{isExpanded && (
+				<div className="space-y-8 mt-4">
+					{section.turns.map((turn) => (
+						<TurnWrapper key={turn.id} turnId={turn.id} onVisible={onTurnVisible}>
+							<TurnView
+								turn={turn}
+								agents={agents}
+								allEvents={allEvents}
+								selectedEventId={selectedEventId}
+								onSelectEvent={onSelectEvent}
+								hideAgentLabel
+								defaultToolsExpanded={defaultToolsExpanded}
+							/>
+						</TurnWrapper>
+					))}
+				</div>
+			)}
 		</div>
 	)
 }

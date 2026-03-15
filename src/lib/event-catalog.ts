@@ -77,6 +77,7 @@ export const STORE_ACTION = {
 		SET_SHORTCUTS_OPEN: "ui/setShortcutsOpen",
 		SET_SHOW_OUTLINE: "ui/setShowOutline",
 		SET_ALL_TOOLS_EXPANDED: "ui/setAllToolsExpanded",
+		SET_ALL_AGENTS_EXPANDED: "ui/setAllAgentsExpanded",
 		SET_DRILLDOWN_AGENT_ID: "ui/setDrilldownAgentId",
 	},
 	FILTER: {

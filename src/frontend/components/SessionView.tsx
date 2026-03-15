@@ -110,6 +110,7 @@ export function SessionView() {
 		shortcutsOpen,
 		showOutline,
 		allToolsExpanded,
+		allAgentsExpanded,
 		drilldownAgentId,
 		setFilterOpen,
 		setSearchOpen,
@@ -251,6 +252,7 @@ export function SessionView() {
 	const pinnedEventIdRef = useRef<string | null>(null)
 	const prevFilterKeyRef = useRef("")
 	const pendingScrollToRef = useRef<string | null>(null)
+	const preDrilldownScrollRef = useRef<number>(0)
 	const activePanelResizeRef = useRef<PanelResizeState | null>(null)
 	const outlinePanelRef = useRef<HTMLElement | null>(null)
 	const detailPanelRef = useRef<HTMLElement | null>(null)
@@ -397,29 +399,33 @@ export function SessionView() {
 		}
 	}, [detailPanelWidth])
 
-	// After turns update, try to scroll to the pending search-selected event.
-	// Falls back to the turn that owns the event when the specific element isn't
-	// in the DOM (e.g. tool events inside collapsed accordions, or tool-results
-	// which are excluded from timeline rendering).
+	// After turns update or drilldown change, try to scroll to the pending
+	// search-selected event. Falls back to the turn that owns the event when
+	// the specific element isn't in the DOM (e.g. tool events inside collapsed
+	// accordions, or tool-results excluded from timeline rendering).
 	useEffect(() => {
 		const eventId = pendingScrollToRef.current
 		if (!eventId) return
-		const eventEl = timelineRef.current?.querySelector(`[data-event-id="${eventId}"]`)
-		if (eventEl) {
-			eventEl.scrollIntoView({behavior: "smooth", block: "center"})
-			pendingScrollToRef.current = null
-			return
-		}
-		for (const turn of turns) {
-			if (turn.events.some((e) => e.id === eventId)) {
-				timelineRef.current
-					?.querySelector(`[data-turn-id="${turn.id}"]`)
-					?.scrollIntoView({behavior: "smooth", block: "start"})
+		// Defer to next frame so drilldown/turn DOM has rendered
+		requestAnimationFrame(() => {
+			const eventEl = timelineRef.current?.querySelector(`[data-event-id="${eventId}"]`)
+			if (eventEl) {
+				eventEl.scrollIntoView({behavior: "smooth", block: "center"})
 				pendingScrollToRef.current = null
-				break
+				return
 			}
-		}
-	}, [turns])
+			for (const turn of turns) {
+				if (turn.events.some((e) => e.id === eventId)) {
+					const turnEl = timelineRef.current?.querySelector(`[data-turn-id="${turn.id}"]`)
+					if (turnEl) {
+						turnEl.scrollIntoView({behavior: "smooth", block: "start"})
+					}
+					pendingScrollToRef.current = null
+					break
+				}
+			}
+		})
+	}, [turns, drilldownAgentId])
 
 	const filterKey = `${search}|${[...typeInclude].join(",")}|${[...typeExclude].join(",")}|${[...agentFilter].join(",")}|${errorsOnly}`
 	if (prevFilterKeyRef.current !== filterKey) {
@@ -492,14 +498,40 @@ export function SessionView() {
 		[searchOpen, filterOpen, selectedEvent],
 	)
 
+	const handleDrilldown = useCallback(
+		(agentId: string) => {
+			preDrilldownScrollRef.current = timelineRef.current?.scrollTop ?? 0
+			setDrilldownAgentId(agentId)
+		},
+		[setDrilldownAgentId],
+	)
+
+	const handleDrilldownBack = useCallback(() => {
+		const scrollTop = preDrilldownScrollRef.current
+		setDrilldownAgentId(null)
+		requestAnimationFrame(() => {
+			if (timelineRef.current) {
+				timelineRef.current.scrollTop = scrollTop
+			}
+		})
+	}, [setDrilldownAgentId])
+
 	const handleNavigate = useCallback(
 		(turnId: string) => {
-			timelineRef.current
-				?.querySelector(`[data-turn-id="${turnId}"]`)
-				?.scrollIntoView({behavior: "smooth", block: "start"})
+			const el = timelineRef.current?.querySelector(`[data-turn-id="${turnId}"]`)
+			if (el) {
+				el.scrollIntoView({behavior: "smooth", block: "start"})
+			} else if (sessionData) {
+				// Turn not in DOM — likely inside a collapsed agent. Find the agent and drilldown.
+				const turn = turns.find((t) => t.id === turnId)
+				const agentId = turn?.events[0]?.agentId
+				if (agentId && agentId !== mainAgentId) {
+					handleDrilldown(agentId)
+				}
+			}
 			setActiveTurnId(turnId)
 		},
-		[setActiveTurnId],
+		[setActiveTurnId, sessionData, turns, mainAgentId, handleDrilldown],
 	)
 
 	const handleSelectSession = useCallback(
@@ -526,14 +558,20 @@ export function SessionView() {
 	// then use pendingScrollToRef so the post-turns-render effect can scroll —
 	// falling back to turn-level scroll for events not in the DOM (collapsed
 	// accordions, tool-results excluded from rendering).
+	// If the event lives inside a subagent, drilldown to that agent so it's visible.
 	const handleSearchSelect = useCallback(
 		(event: Event) => {
 			clearFilters()
 			setSelectedEvent(event)
 			pinnedEventIdRef.current = event.id
 			pendingScrollToRef.current = event.id
+			if (event.agentId && event.agentId !== mainAgentId) {
+				handleDrilldown(event.agentId)
+			} else {
+				setDrilldownAgentId(null)
+			}
 		},
-		[clearFilters, setSelectedEvent],
+		[clearFilters, setSelectedEvent, mainAgentId, handleDrilldown, setDrilldownAgentId],
 	)
 
 	const isFiltered =
@@ -646,28 +684,6 @@ export function SessionView() {
 								/>
 							</svg>
 							<kbd className="font-mono hidden sm:inline">{formatHotkey(getKeys("search.open"))}</kbd>
-						</button>
-						<button
-							type="button"
-							onClick={() => setAllToolsExpanded(!allToolsExpanded)}
-							className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-								allToolsExpanded ? "text-zinc-600 hover:text-zinc-400" : "bg-zinc-800 text-zinc-300"
-							}`}
-							title={`${allToolsExpanded ? "Collapse" : "Expand"} all tool calls (${formatHotkey(getKeys("tools.toggle"))})`}
-						>
-							<svg
-								className="w-4 h-4"
-								fill="none"
-								viewBox="0 0 24 24"
-								stroke="currentColor"
-								aria-hidden="true"
-							>
-								{allToolsExpanded ? (
-									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 9l-7 7-7-7" />
-								) : (
-									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5l7 7-7 7" />
-								)}
-							</svg>
 						</button>
 						<button
 							type="button"
@@ -793,6 +809,7 @@ export function SessionView() {
 								selectedEventId={selectedEvent?.id ?? null}
 								onSelectEvent={handleSelectEvent}
 								onTurnVisible={setActiveTurnId}
+								onBack={handleDrilldownBack}
 								defaultToolsExpanded={allToolsExpanded}
 								isNewEvent={isNewEvent}
 							/>
@@ -853,8 +870,9 @@ export function SessionView() {
 											onSelectEvent={handleSelectEvent}
 											onTurnVisible={setActiveTurnId}
 											defaultToolsExpanded={allToolsExpanded}
+											defaultAgentsExpanded={allAgentsExpanded}
 											isTailing={isTailing}
-											onDrilldown={setDrilldownAgentId}
+											onDrilldown={handleDrilldown}
 										/>
 									</div>
 								)
