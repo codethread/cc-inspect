@@ -1,4 +1,4 @@
-import {useMemo} from "react"
+import {type KeyboardEvent, useMemo} from "react"
 import type {AgentNode, Event} from "#types"
 import {SESSION_EVENT_TYPE} from "../../lib/event-catalog"
 import {getAgentColorSet} from "./session-view/agent-colors"
@@ -6,6 +6,15 @@ import {groupTurnEvents} from "./session-view/grouping"
 import {formatTime, getEventSummary} from "./session-view/helpers"
 import type {Turn} from "./session-view/types"
 import {ToolGroupAccordion} from "./ToolGroupAccordion"
+
+// iOS Safari's <button> has an internal anonymous flex context that breaks -webkit-line-clamp on children.
+// Using div+role="button" avoids this while preserving keyboard accessibility via handleButtonKeyDown.
+function handleButtonKeyDown(e: KeyboardEvent, onClick: () => void) {
+	if (e.key === "Enter" || e.key === " ") {
+		e.preventDefault()
+		onClick()
+	}
+}
 
 function UserMessageBlock({
 	event,
@@ -20,9 +29,11 @@ function UserMessageBlock({
 	const continuedSessionId = event.data.planHandoff?.continuedSessionId
 	const isPlanHandoff = Boolean(event.data.planHandoff)
 	return (
-		<button
-			type="button"
+		<div
+			role="button"
+			tabIndex={0}
 			onClick={onClick}
+			onKeyDown={(e) => handleButtonKeyDown(e, onClick)}
 			className={`w-full text-left border rounded-xl px-5 py-4 transition-colors cursor-pointer ${
 				isPlanHandoff
 					? isActive
@@ -56,7 +67,7 @@ function UserMessageBlock({
 			) : (
 				<div className="text-zinc-200 text-sm leading-relaxed line-clamp-3">{event.data.text}</div>
 			)}
-		</button>
+		</div>
 	)
 }
 
@@ -71,9 +82,11 @@ function AssistantMessageBlock({
 }) {
 	if (event.data.type !== SESSION_EVENT_TYPE.ASSISTANT_MESSAGE) return null
 	return (
-		<button
-			type="button"
+		<div
+			role="button"
+			tabIndex={0}
 			onClick={onClick}
+			onKeyDown={(e) => handleButtonKeyDown(e, onClick)}
 			className={`w-full text-left px-1 py-1 rounded-lg transition-colors cursor-pointer ${
 				isActive ? "bg-zinc-800/50 ring-1 ring-violet-400/20" : "hover:bg-zinc-800/30"
 			}`}
@@ -84,16 +97,18 @@ function AssistantMessageBlock({
 				<span className="text-xs text-zinc-600">{formatTime(event.timestamp)}</span>
 			</div>
 			<div className="text-zinc-200 text-sm leading-relaxed line-clamp-3 px-1">{event.data.text}</div>
-		</button>
+		</div>
 	)
 }
 
 function ThinkingBlock({event, isActive, onClick}: {event: Event; isActive: boolean; onClick: () => void}) {
 	if (event.data.type !== SESSION_EVENT_TYPE.THINKING) return null
 	return (
-		<button
-			type="button"
+		<div
+			role="button"
+			tabIndex={0}
 			onClick={onClick}
+			onKeyDown={(e) => handleButtonKeyDown(e, onClick)}
 			className={`w-full text-left px-1 py-1 rounded-lg transition-colors cursor-pointer ${
 				isActive ? "bg-zinc-800/50 ring-1 ring-fuchsia-400/20" : "hover:bg-zinc-800/30"
 			}`}
@@ -104,16 +119,18 @@ function ThinkingBlock({event, isActive, onClick}: {event: Event; isActive: bool
 				<span className="text-xs text-zinc-600">{formatTime(event.timestamp)}</span>
 			</div>
 			<div className="pl-1 text-zinc-600 text-sm truncate italic">{event.data.content.slice(0, 120)}</div>
-		</button>
+		</div>
 	)
 }
 
 function AgentSpawnBlock({event, isActive, onClick}: {event: Event; isActive: boolean; onClick: () => void}) {
 	if (event.data.type !== SESSION_EVENT_TYPE.AGENT_SPAWN) return null
 	return (
-		<button
-			type="button"
+		<div
+			role="button"
+			tabIndex={0}
 			onClick={onClick}
+			onKeyDown={(e) => handleButtonKeyDown(e, onClick)}
 			className={`w-full text-left bg-orange-500/5 border rounded-xl px-5 py-4 transition-colors cursor-pointer ${
 				isActive
 					? "border-orange-400/40 ring-1 ring-orange-400/20"
@@ -126,16 +143,18 @@ function AgentSpawnBlock({event, isActive, onClick}: {event: Event; isActive: bo
 				<span className="text-xs text-zinc-600">{formatTime(event.timestamp)}</span>
 			</div>
 			<div className="text-zinc-300 text-sm">{event.data.description}</div>
-		</button>
+		</div>
 	)
 }
 
 function SummaryBlock({event, isActive, onClick}: {event: Event; isActive: boolean; onClick: () => void}) {
 	if (event.data.type !== SESSION_EVENT_TYPE.SUMMARY) return null
 	return (
-		<button
-			type="button"
+		<div
+			role="button"
+			tabIndex={0}
 			onClick={onClick}
+			onKeyDown={(e) => handleButtonKeyDown(e, onClick)}
 			className={`w-full text-left bg-zinc-800/30 border rounded-xl px-5 py-4 transition-colors cursor-pointer ${
 				isActive ? "border-zinc-600 ring-1 ring-zinc-500/20" : "border-zinc-700/30 hover:border-zinc-700"
 			}`}
@@ -146,7 +165,7 @@ function SummaryBlock({event, isActive, onClick}: {event: Event; isActive: boole
 				<span className="text-xs text-zinc-600">{formatTime(event.timestamp)}</span>
 			</div>
 			<div className="text-zinc-400 text-sm leading-relaxed line-clamp-3">{event.data.summary}</div>
-		</button>
+		</div>
 	)
 }
 
