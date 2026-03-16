@@ -153,6 +153,8 @@ export function normalizeToolUseResult(toolUseResult: LogEntry["toolUseResult"])
 interface DetectedPlanHandoff extends PlanHandoffData {
 	exitPlanEntryId: string
 	rejectionEntryId?: string
+	// Real UUID when the session was interrupted; synthetic "__plan_end_<uuid>" sentinel
+	// when the plan was accepted externally (no interruption message in this session).
 	interruptionEntryId: string
 }
 
@@ -203,6 +205,23 @@ function extractPlanContentFromContinuation(entry: LogEntry): string | undefined
 	return entry.message.content.startsWith(prefix) ? entry.message.content.slice(prefix.length) : undefined
 }
 
+/**
+ * Returns true when a candidate's plan and promptId are compatible with a
+ * potential continuation entry. Requires exact promptId match when both sides
+ * carry one; falls back to plan-content-only when neither does. Rejects
+ * mismatched presence (one has, one doesn't) to avoid false associations.
+ */
+function planMatchesCandidate(
+	candidate: Pick<DetectedPlanHandoff, "plan" | "promptId">,
+	planContent: string,
+	entryPromptId: string | undefined,
+): boolean {
+	if (candidate.plan !== planContent) return false
+	if (candidate.promptId && entryPromptId) return candidate.promptId === entryPromptId
+	// Only match on content alone when neither side has a promptId
+	return !candidate.promptId && !entryPromptId
+}
+
 async function detectPlanHandoffs(
 	sessionFilePath: string,
 	mainLogEntries: LogEntry[],
@@ -240,12 +259,15 @@ async function detectPlanHandoffs(
 			}
 		}
 
-		if (!interruptionEntryId) continue
+		// When there's no interruption entry the user accepted the plan externally
+		// (e.g. started a new session manually). Use a synthetic key so we can still
+		// detect and link the continuation session below.
+		const effectiveInterruptionId = interruptionEntryId ?? `__plan_end_${entry.uuid}`
 
 		candidates.push({
 			exitPlanEntryId: entry.uuid,
 			rejectionEntryId,
-			interruptionEntryId,
+			interruptionEntryId: effectiveInterruptionId,
 			plan,
 			promptId,
 		})
@@ -273,22 +295,25 @@ async function detectPlanHandoffs(
 		const continuationEntry = siblingEntries.find((entry) => {
 			const planContent = extractPlanContentFromContinuation(entry)
 			if (!planContent) return false
-			return candidates.some(
-				(candidate) =>
-					Boolean(candidate.promptId) &&
-					candidate.promptId === entry.promptId &&
-					candidate.plan === planContent,
-			)
+			return candidates.some((candidate) => planMatchesCandidate(candidate, planContent, entry.promptId))
 		})
 
 		if (!continuationEntry?.timestamp) continue
 		const planContent = extractPlanContentFromContinuation(continuationEntry)
 		if (!planContent) continue
 
-		const candidate = candidates.find(
-			(item) =>
-				Boolean(item.promptId) && item.promptId === continuationEntry.promptId && item.plan === planContent,
-		)
+		// Prefer an exact promptId+plan match; only fall back to plan-only when
+		// neither side carries a promptId (older Claude Code sessions).
+		// For the content-only fallback, use findLast so that when multiple
+		// same-plan candidates lack promptIds the latest handoff attempt wins.
+		const candidate =
+			candidates.find(
+				(item) =>
+					item.plan === planContent &&
+					item.promptId &&
+					continuationEntry.promptId &&
+					item.promptId === continuationEntry.promptId,
+			) ?? candidates.findLast((item) => planMatchesCandidate(item, planContent, continuationEntry.promptId))
 		if (!candidate) continue
 
 		const timestamp = new Date(continuationEntry.timestamp).getTime()
@@ -594,16 +619,8 @@ export function parseEvents(
 	const events: Event[] = []
 	const {sessionId, agentId, planHandoffs} = options
 	const handoffByEntryId = planHandoffs ?? new Map<string, DetectedPlanHandoff>()
-	const skippedEntryIds = new Set<string>()
-
-	for (const handoff of handoffByEntryId.values()) {
-		skippedEntryIds.add(handoff.exitPlanEntryId)
-		if (handoff.rejectionEntryId) skippedEntryIds.add(handoff.rejectionEntryId)
-	}
 
 	for (const entry of logEntries) {
-		if (entry.uuid && skippedEntryIds.has(entry.uuid)) continue
-
 		// Skip unknown log entry types (e.g., "queue-operation")
 		if (
 			entry.type !== CLAUDE_LOG_ENTRY_TYPE.SUMMARY &&
@@ -781,6 +798,35 @@ export function parseEvents(
 				}
 			}
 		}
+	}
+
+	// For terminal handoffs (plan accepted externally, no interruption entry in this session),
+	// emit a synthetic USER_MESSAGE at the end of the event list — but only when we found
+	// a matching continuation session, so we don't fabricate handoffs for plain rejections.
+	for (const [key, handoff] of handoffByEntryId) {
+		if (!key.startsWith("__plan_end_")) continue
+		if (!handoff.continuedSessionId) continue
+		const lastEvent = events.at(-1)
+		events.push({
+			id: key,
+			parentId: lastEvent?.id ?? null,
+			timestamp: lastEvent ? new Date(lastEvent.timestamp.getTime() + 1) : new Date(),
+			sessionId,
+			agentId: agentId ?? sessionId,
+			agentName: null,
+			type: SESSION_EVENT_TYPE.USER_MESSAGE as EventType,
+			data: {
+				type: SESSION_EVENT_TYPE.USER_MESSAGE,
+				text: "Plan accepted.",
+				model: undefined,
+				planHandoff: {
+					plan: handoff.plan,
+					promptId: handoff.promptId,
+					continuedSessionId: handoff.continuedSessionId,
+					continuedSessionPath: handoff.continuedSessionPath,
+				},
+			},
+		})
 	}
 
 	return events

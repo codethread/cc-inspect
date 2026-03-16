@@ -94,7 +94,10 @@ export function DetailPanel({
 
 	const jqCommand = useMemo(() => {
 		if (!event) return ""
-		const filter = `select(.uuid == ${JSON.stringify(event.id)})`
+		// Synthetic terminal-handoff events use "__plan_end_<exitPlanUuid>" as their ID.
+		// Strip the prefix so jq resolves to the real ExitPlanMode entry in the JSONL.
+		const lookupId = event.id.startsWith("__plan_end_") ? event.id.slice("__plan_end_".length) : event.id
+		const filter = `select(.uuid == ${JSON.stringify(lookupId)})`
 		return `jq -c ${shellQuote(filter)} ${shellQuote(resolvedSessionFilePath)}`
 	}, [event, resolvedSessionFilePath])
 
@@ -174,7 +177,12 @@ export function DetailPanel({
 				</span>
 				<button
 					type="button"
-					onClick={() => void handleCopy("event-id", event.id)}
+					onClick={() =>
+						void handleCopy(
+							"event-id",
+							event.id.startsWith("__plan_end_") ? event.id.slice("__plan_end_".length) : event.id,
+						)
+					}
 					className="flex items-center gap-1 px-2 py-0.5 rounded-md text-xs text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition-colors cursor-pointer"
 					title="Copy event ID"
 				>

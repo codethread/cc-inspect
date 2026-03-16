@@ -806,7 +806,7 @@ describe("parseSessionLogs", () => {
 		expect(child?.events.length).toBeGreaterThan(0)
 	})
 
-	it("collapses native plan handoff into a linked user event", async () => {
+	it("marks interruption entry with planHandoff data; all other plan events remain visible", async () => {
 		const oldSessionContent = [
 			JSON.stringify({
 				type: "assistant",
@@ -895,9 +895,16 @@ describe("parseSessionLogs", () => {
 
 		const data = await parseSessionLogs("/project/old.jsonl", "/project/old/subagents", reader)
 
-		expect(data.allEvents).toHaveLength(2)
-		expect(data.allEvents.map((event) => event.type)).toEqual(["assistant-message", "user-message"])
-		expect(data.allEvents[1]?.data).toEqual({
+		// ExitPlanMode tool use and the rejection tool result are now visible; only the
+		// interrupted user message gets planHandoff data attached.
+		expect(data.allEvents).toHaveLength(4)
+		expect(data.allEvents.map((event) => event.type)).toEqual([
+			"assistant-message",
+			"tool-use",
+			"tool-result",
+			"user-message",
+		])
+		expect(data.allEvents[3]?.data).toEqual({
 			type: "user-message",
 			text: "[Request interrupted by user for tool use]",
 			model: undefined,
