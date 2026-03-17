@@ -86,6 +86,7 @@ export const STORE_ACTION = {
 		SET_TYPE_EXCLUDE: "filter/setTypeExclude",
 		SET_AGENT_FILTER: "filter/setAgentFilter",
 		SET_MODEL_FILTER: "filter/setModelFilter",
+		SET_SUBAGENT_TYPE_FILTER: "filter/setSubagentTypeFilter",
 		SET_ERRORS_ONLY: "filter/setErrorsOnly",
 		CLEAR_FILTERS: "filter/clearFilters",
 	},

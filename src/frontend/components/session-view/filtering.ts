@@ -8,9 +8,11 @@ export interface FilterCriteria {
 	typeExclude: Set<EventType>
 	agentFilter: Set<string>
 	modelFilter: Set<string>
+	subagentTypeFilter: Set<string>
 	errorsOnly: boolean
 	failedToolUseIds: Set<string>
 	agentModelMap: Map<string, string>
+	agentSubagentTypeMap: Map<string, string>
 }
 
 function resolveEventModel(event: Event, agentModelMap: Map<string, string>): string | null {
@@ -34,6 +36,10 @@ export function matchesFilters(event: Event, criteria: FilterCriteria): boolean 
 	if (criteria.modelFilter.size > 0) {
 		const model = resolveEventModel(event, criteria.agentModelMap)
 		if (!model || !criteria.modelFilter.has(model)) return false
+	}
+	if (criteria.subagentTypeFilter.size > 0) {
+		const subagentType = criteria.agentSubagentTypeMap.get(event.agentId ?? "")
+		if (!subagentType || !criteria.subagentTypeFilter.has(subagentType)) return false
 	}
 	if (criteria.search) {
 		const q = criteria.search.toLowerCase()

@@ -120,7 +120,7 @@ export function SessionView() {
 		setDrilldownAgentId,
 	} = useUIStore()
 
-	const {search, typeInclude, typeExclude, agentFilter, modelFilter, errorsOnly, clearFilters} = useFilterStore()
+	const {search, typeInclude, typeExclude, agentFilter, modelFilter, subagentTypeFilter, errorsOnly, clearFilters} = useFilterStore()
 	const setErrorsOnly = useFilterStore((s) => s.setErrorsOnly)
 
 	const {selectedEvent, activeTurnId, setSelectedEvent, setActiveTurnId} = useSelectionStore()
@@ -261,6 +261,22 @@ export function SessionView() {
 		return models
 	}, [agentModelMap, sessionData])
 
+	const agentSubagentTypeMap = useMemo(() => {
+		const map = new Map<string, string>()
+		for (const a of agents) {
+			if (a.subagentType) map.set(a.id, a.subagentType)
+		}
+		return map
+	}, [agents])
+
+	const availableSubagentTypes = useMemo(() => {
+		const types = new Set<string>()
+		for (const t of agentSubagentTypeMap.values()) {
+			types.add(t)
+		}
+		return types
+	}, [agentSubagentTypeMap])
+
 	const filteredEvents = useMemo(
 		() =>
 			sessionData
@@ -271,13 +287,15 @@ export function SessionView() {
 							typeExclude,
 							agentFilter,
 							modelFilter,
+							subagentTypeFilter,
 							errorsOnly,
 							failedToolUseIds,
 							agentModelMap,
+							agentSubagentTypeMap,
 						}),
 					)
 				: [],
-		[sessionData, search, typeInclude, typeExclude, agentFilter, modelFilter, errorsOnly, failedToolUseIds, agentModelMap],
+		[sessionData, search, typeInclude, typeExclude, agentFilter, modelFilter, subagentTypeFilter, errorsOnly, failedToolUseIds, agentModelMap, agentSubagentTypeMap],
 	)
 
 	const turns = useMemo(() => groupIntoTurns(filteredEvents, mainAgentId), [filteredEvents, mainAgentId])
@@ -610,7 +628,7 @@ export function SessionView() {
 	)
 
 	const isFiltered =
-		search || typeInclude.size > 0 || typeExclude.size > 0 || agentFilter.size > 0 || modelFilter.size > 0 || errorsOnly
+		search || typeInclude.size > 0 || typeExclude.size > 0 || agentFilter.size > 0 || modelFilter.size > 0 || subagentTypeFilter.size > 0 || errorsOnly
 
 	return (
 		<div
@@ -1023,6 +1041,7 @@ export function SessionView() {
 					agents={agents}
 					errorCount={errorCount}
 					availableModels={availableModels}
+					availableSubagentTypes={availableSubagentTypes}
 				/>
 			)}
 

@@ -14,12 +14,14 @@ export function FilterDrawer({
 	agents,
 	errorCount,
 	availableModels,
+	availableSubagentTypes,
 }: {
 	open: boolean
 	onClose: () => void
 	agents: AgentNode[]
 	errorCount: number
 	availableModels: Set<string>
+	availableSubagentTypes: Set<string>
 }) {
 	const {
 		search,
@@ -27,12 +29,14 @@ export function FilterDrawer({
 		typeExclude,
 		agentFilter,
 		modelFilter,
+		subagentTypeFilter,
 		errorsOnly,
 		setSearch,
 		setTypeInclude,
 		setTypeExclude,
 		setAgentFilter,
 		setModelFilter,
+		setSubagentTypeFilter,
 		setErrorsOnly,
 	} = useFilterStore()
 
@@ -53,6 +57,13 @@ export function FilterDrawer({
 		if (next.has(family)) next.delete(family)
 		else next.add(family)
 		setModelFilter(next)
+	}
+
+	const toggleSubagentType = (type: string) => {
+		const next = new Set(subagentTypeFilter)
+		if (next.has(type)) next.delete(type)
+		else next.add(type)
+		setSubagentTypeFilter(next)
 	}
 
 	const typeLabels: Record<EventType, string> = {
@@ -196,6 +207,43 @@ export function FilterDrawer({
 											}`}
 										>
 											{family}
+										</button>
+									)
+								})}
+							</div>
+						</div>
+					)}
+
+					{/* Subagent type filter */}
+					{availableSubagentTypes.size > 0 && (
+						<div>
+							<div className="flex items-center justify-between mb-2">
+								<span className="text-xs font-medium text-zinc-400">Agent Type</span>
+								{subagentTypeFilter.size > 0 && (
+									<button
+										type="button"
+										onClick={() => setSubagentTypeFilter(new Set())}
+										className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors cursor-pointer"
+									>
+										Reset
+									</button>
+								)}
+							</div>
+							<div className="flex flex-wrap gap-1.5">
+								{[...availableSubagentTypes].sort().map((type) => {
+									const active = subagentTypeFilter.size === 0 || subagentTypeFilter.has(type)
+									return (
+										<button
+											key={type}
+											type="button"
+											onClick={() => toggleSubagentType(type)}
+											className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+												active
+													? "bg-zinc-800 text-zinc-200"
+													: "text-zinc-600 hover:text-zinc-400 hover:bg-zinc-800/50"
+											}`}
+										>
+											{type}
 										</button>
 									)
 								})}

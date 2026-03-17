@@ -17,6 +17,7 @@ interface FilterState {
 	typeExclude: Set<EventType>
 	agentFilter: Set<string>
 	modelFilter: Set<string>
+	subagentTypeFilter: Set<string>
 	errorsOnly: boolean
 	errorsOnlyToolUseWasExcluded: boolean
 	errorsOnlyToolUseWasMissingFromInclude: boolean
@@ -25,6 +26,7 @@ interface FilterState {
 	setTypeExclude: (s: Set<EventType>) => void
 	setAgentFilter: (s: Set<string>) => void
 	setModelFilter: (s: Set<string>) => void
+	setSubagentTypeFilter: (s: Set<string>) => void
 	setErrorsOnly: (v: boolean) => void
 	clearFilters: () => void
 }
@@ -64,6 +66,7 @@ export const useFilterStore = create<FilterState>()(
 				typeExclude: new Set<EventType>(),
 				agentFilter: new Set<string>(),
 				modelFilter: new Set<string>(),
+				subagentTypeFilter: new Set<string>(),
 				errorsOnly: false,
 				errorsOnlyToolUseWasExcluded: false,
 				errorsOnlyToolUseWasMissingFromInclude: false,
@@ -76,6 +79,8 @@ export const useFilterStore = create<FilterState>()(
 					set({agentFilter}, false, {type: STORE_ACTION.FILTER.SET_AGENT_FILTER}),
 				setModelFilter: (modelFilter) =>
 					set({modelFilter}, false, {type: STORE_ACTION.FILTER.SET_MODEL_FILTER}),
+				setSubagentTypeFilter: (subagentTypeFilter) =>
+					set({subagentTypeFilter}, false, {type: STORE_ACTION.FILTER.SET_SUBAGENT_TYPE_FILTER}),
 				setErrorsOnly: (errorsOnly) =>
 					set(
 						(state) => {
@@ -128,6 +133,7 @@ export const useFilterStore = create<FilterState>()(
 							typeExclude: new Set<EventType>(),
 							agentFilter: new Set<string>(),
 							modelFilter: new Set<string>(),
+							subagentTypeFilter: new Set<string>(),
 							errorsOnly: false,
 							errorsOnlyToolUseWasExcluded: false,
 							errorsOnlyToolUseWasMissingFromInclude: false,

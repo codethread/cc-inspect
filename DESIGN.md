@@ -164,6 +164,7 @@ A slide-out filter drawer (triggered from the header) provides:
 - **Display toggles** — control default expanded/collapsed state for tool call accordions and agent sections. Both default to collapsed. Changes persist to `localStorage`.
 - **Text search** — matches against event summaries, agent names, event types, and tool input values (bash commands, file paths, grep patterns, etc.)
 - **Model filter** — toggle buttons for each model family present in the session (opus/sonnet/haiku). All active by default (empty set = all). Model strings are bucketed by family name regardless of version.
+- **Agent type filter** — toggle buttons for each subagent type present in the session (e.g. Explore, browser-user). All active by default (empty set = all). Only shown when subagent types exist.
 - **Event type toggles** — include (focus) or exclude (hide) specific event types independently
 - **Agent selection** — filter events to specific agents
 - **Errors only toggle** — shows only failed tool-result events and their linked tool-use events. Also available as a red-tinted button in the header for quick access.
