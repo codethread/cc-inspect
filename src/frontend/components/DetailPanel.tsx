@@ -4,7 +4,7 @@ import type {AgentNode, Event} from "#types"
 import {SESSION_EVENT_TYPE} from "../../lib/event-catalog"
 import {MarkdownContent} from "./MarkdownContent"
 import {getAgentColorSet} from "./session-view/agent-colors"
-import {formatTime} from "./session-view/helpers"
+import {formatAgentModelLabel, formatTime} from "./session-view/helpers"
 import {Popover, PopoverContent, PopoverTrigger} from "./ui/popover"
 
 type CopyStatus = "idle" | "copied" | "error"
@@ -159,6 +159,8 @@ export function DetailPanel({
 	}
 
 	const colors = getAgentColorSet(agents, event.agentId)
+	const agentNode = event.agentId ? agents.find((a) => a.id === event.agentId) : agents[0]
+	const agentModelLabel = formatAgentModelLabel(agentNode?.model, agentNode?.subagentType)
 	const copyIdStatus = getCopyStatus("event-id")
 	const copyJqStatus = getCopyStatus("jq-command")
 	const selectedPlanHandoff =
@@ -169,8 +171,11 @@ export function DetailPanel({
 			{/* Header */}
 			<div className="flex items-center gap-3 px-4 py-3 border-b border-zinc-800 flex-shrink-0">
 				<span className="w-2 h-2 rounded-full flex-shrink-0" style={{backgroundColor: colors.dot}} />
-				<span className="text-xs text-zinc-400">
-					{event.agentName ?? event.agentId?.slice(0, 10) ?? "main"}
+				<span className="flex flex-col min-w-0">
+					<span className="text-xs text-zinc-400">
+						{event.agentName ?? event.agentId?.slice(0, 10) ?? "main"}
+					</span>
+					{agentModelLabel && <span className="text-[10px] text-zinc-500">{agentModelLabel}</span>}
 				</span>
 				<span className="text-xs text-zinc-600 font-mono tabular-nums ml-auto">
 					{formatTime(event.timestamp)}

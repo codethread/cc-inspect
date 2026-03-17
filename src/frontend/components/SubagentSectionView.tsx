@@ -1,10 +1,19 @@
 import {useEffect, useState} from "react"
 import type {AgentNode, Event} from "#types"
 import {getAgentColorSet} from "./session-view/agent-colors"
-import {getPendingTaskDescriptions, isAgentComplete} from "./session-view/helpers"
+import {formatAgentModelLabel, getPendingTaskDescriptions, isAgentComplete} from "./session-view/helpers"
 import type {SubagentSection} from "./session-view/types"
 import {TurnView} from "./TurnView"
 import {TurnWrapper} from "./TurnWrapper"
+
+function AgentLabel({label, modelLabel, colorClass}: {label: string; modelLabel: string | null; colorClass: string}) {
+	return (
+		<span className="flex flex-col min-w-0">
+			<span className={`text-xs font-semibold uppercase tracking-wide ${colorClass}`}>{label}</span>
+			{modelLabel && <span className="text-[10px] text-zinc-500 tracking-wide">{modelLabel}</span>}
+		</span>
+	)
+}
 
 export function SubagentSectionView({
 	section,
@@ -46,6 +55,7 @@ export function SubagentSectionView({
 	const label =
 		[agent?.description, resolvedName, agent?.subagentType, pendingDescription].find((s) => s?.trim()) ??
 		"Agent"
+	const modelLabel = formatAgentModelLabel(agent?.model, agent?.subagentType)
 
 	const [isExpanded, setIsExpanded] = useState(defaultAgentsExpanded)
 
@@ -67,7 +77,7 @@ export function SubagentSectionView({
 						className="flex items-center gap-2 w-full text-left cursor-pointer"
 					>
 						<span className="w-2 h-2 rounded-full flex-shrink-0" style={{backgroundColor: colors.dot}} />
-						<span className={`text-xs font-semibold uppercase tracking-wide ${colors.text}`}>{label}</span>
+						<AgentLabel label={label} modelLabel={modelLabel} colorClass={colors.text} />
 						{/* Animated spinner */}
 						<svg
 							className="w-3 h-3 animate-spin ml-auto flex-shrink-0 text-zinc-500"
@@ -92,7 +102,7 @@ export function SubagentSectionView({
 			<div className={`ml-3 pl-4 border rounded-xl py-3 pr-4 ${colors.bg} ${colors.border}`}>
 				<div className="flex items-center gap-2">
 					<span className="w-2 h-2 rounded-full flex-shrink-0" style={{backgroundColor: colors.dot}} />
-					<span className={`text-xs font-semibold uppercase tracking-wide ${colors.text}`}>{label}</span>
+					<AgentLabel label={label} modelLabel={modelLabel} colorClass={colors.text} />
 					{/* Completion indicator */}
 					<svg
 						className="w-3 h-3 flex-shrink-0 text-emerald-500"
@@ -164,7 +174,7 @@ export function SubagentSectionView({
 		<div className={`ml-3 pl-4 border rounded-xl py-3 pr-4 ${colors.bg} ${colors.border}`}>
 			<div className="flex items-center gap-2">
 				<span className="w-2 h-2 rounded-full flex-shrink-0" style={{backgroundColor: colors.dot}} />
-				<span className={`text-xs font-semibold uppercase tracking-wide ${colors.text}`}>{label}</span>
+				<AgentLabel label={label} modelLabel={modelLabel} colorClass={colors.text} />
 				{/* Drilldown button */}
 				<button
 					type="button"

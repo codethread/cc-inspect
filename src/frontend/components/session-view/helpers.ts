@@ -1,4 +1,4 @@
-import type {Event, EventType} from "#types"
+import type {AgentNode, Event, EventType} from "#types"
 import {SESSION_EVENT_TYPE, SESSION_EVENT_TYPE_VALUES} from "../../../lib/event-catalog"
 
 export const EVENT_TYPES: EventType[] = [...SESSION_EVENT_TYPE_VALUES]
@@ -126,7 +126,7 @@ export function getPendingTaskDescriptions(allEvents: Event[]): string[] {
 	for (const e of allEvents) {
 		if (
 			e.data.type === SESSION_EVENT_TYPE.TOOL_USE &&
-			e.data.toolName === "Task" &&
+			(e.data.toolName === "Task" || e.data.toolName === "Agent") &&
 			!completedToolUseIds.has(e.data.toolId) &&
 			e.data.description
 		) {
@@ -152,6 +152,53 @@ export function isAgentComplete(agentId: string, allEvents: Event[]): boolean {
 	if (!lastResult) return false
 	if (!lastResume) return true
 	return lastResult.timestamp >= lastResume.timestamp
+}
+
+/**
+ * Bucket a raw model string (e.g. "claude-sonnet-4-6[1m]") into a family name.
+ * Returns null when the model string is missing or unrecognised.
+ */
+export function normalizeModelFamily(model: string | undefined | null): string | null {
+	if (!model) return null
+	const lower = model.toLowerCase()
+	if (lower.includes("opus")) return "opus"
+	if (lower.includes("sonnet")) return "sonnet"
+	if (lower.includes("haiku")) return "haiku"
+	return null
+}
+
+/**
+ * Build a compact label like "haiku | explore" or just "opus".
+ * Returns null when no model info is available.
+ */
+export function formatAgentModelLabel(
+	model: string | undefined | null,
+	subagentType: string | undefined | null,
+): string | null {
+	const family = normalizeModelFamily(model)
+	if (!family && !subagentType) return null
+	if (family && subagentType) return `${family} · ${subagentType}`
+	return family ?? subagentType ?? null
+}
+
+/**
+ * Resolve the model family for an event.
+ * Checks event-level model first (assistant/user messages), then falls back to agent-level model.
+ */
+export function resolveEventModelFamily(event: Event, agents: AgentNode[]): string | null {
+	const eventData = event.data
+	if ("model" in eventData && eventData.model) {
+		return normalizeModelFamily(eventData.model as string)
+	}
+	if (event.agentId) {
+		const agent = agents.find((a) => a.id === event.agentId)
+		if (agent?.model) return normalizeModelFamily(agent.model)
+	}
+	// Main agent (agentId is null) — check the first agent (root)
+	if (event.agentId === null && agents.length > 0) {
+		return normalizeModelFamily(agents[0]?.model)
+	}
+	return null
 }
 
 export function getEventSearchableText(event: Event): string {

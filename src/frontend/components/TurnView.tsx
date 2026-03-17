@@ -3,7 +3,7 @@ import type {AgentNode, Event} from "#types"
 import {SESSION_EVENT_TYPE} from "../../lib/event-catalog"
 import {getAgentColorSet} from "./session-view/agent-colors"
 import {groupTurnEvents} from "./session-view/grouping"
-import {formatTime, getEventSummary} from "./session-view/helpers"
+import {formatAgentModelLabel, formatTime, getEventSummary, normalizeModelFamily} from "./session-view/helpers"
 import type {Turn} from "./session-view/types"
 import {ToolGroupAccordion} from "./ToolGroupAccordion"
 
@@ -81,6 +81,7 @@ function AssistantMessageBlock({
 	onClick: () => void
 }) {
 	if (event.data.type !== SESSION_EVENT_TYPE.ASSISTANT_MESSAGE) return null
+	const model = normalizeModelFamily(event.data.model)
 	return (
 		<div
 			role="button"
@@ -94,6 +95,7 @@ function AssistantMessageBlock({
 		>
 			<div className="flex items-center gap-2 mb-1.5 px-1">
 				<span className="text-xs font-semibold text-violet-400 uppercase tracking-wider">Assistant</span>
+				{model && <span className="text-[10px] text-zinc-500">{model}</span>}
 				<span className="text-xs text-zinc-600">{formatTime(event.timestamp)}</span>
 			</div>
 			<div className="text-zinc-200 text-sm leading-relaxed line-clamp-3 px-1">{event.data.text}</div>
@@ -101,7 +103,17 @@ function AssistantMessageBlock({
 	)
 }
 
-function ThinkingBlock({event, isActive, onClick}: {event: Event; isActive: boolean; onClick: () => void}) {
+function ThinkingBlock({
+	event,
+	isActive,
+	onClick,
+	model,
+}: {
+	event: Event
+	isActive: boolean
+	onClick: () => void
+	model: string | null
+}) {
 	if (event.data.type !== SESSION_EVENT_TYPE.THINKING) return null
 	return (
 		<div
@@ -116,6 +128,7 @@ function ThinkingBlock({event, isActive, onClick}: {event: Event; isActive: bool
 		>
 			<div className="flex items-center gap-2 mb-1 px-1">
 				<span className="text-xs font-semibold text-fuchsia-400/70 uppercase tracking-wider">Thinking</span>
+				{model && <span className="text-[10px] text-zinc-500">{model}</span>}
 				<span className="text-xs text-zinc-600">{formatTime(event.timestamp)}</span>
 			</div>
 			<div className="pl-1 text-zinc-600 text-sm truncate italic">{event.data.content.slice(0, 120)}</div>
@@ -125,6 +138,7 @@ function ThinkingBlock({event, isActive, onClick}: {event: Event; isActive: bool
 
 function AgentSpawnBlock({event, isActive, onClick}: {event: Event; isActive: boolean; onClick: () => void}) {
 	if (event.data.type !== SESSION_EVENT_TYPE.AGENT_SPAWN) return null
+	const model = normalizeModelFamily(event.data.model)
 	return (
 		<div
 			role="button"
@@ -140,6 +154,7 @@ function AgentSpawnBlock({event, isActive, onClick}: {event: Event; isActive: bo
 		>
 			<div className="flex items-center gap-2 mb-2">
 				<span className="text-xs font-semibold text-orange-400 uppercase tracking-wider">Agent Spawned</span>
+				{model && <span className="text-[10px] text-zinc-500">{model}</span>}
 				<span className="text-xs text-zinc-600">{formatTime(event.timestamp)}</span>
 			</div>
 			<div className="text-zinc-300 text-sm">{event.data.description}</div>
@@ -187,6 +202,9 @@ export function TurnView({
 	defaultToolsExpanded?: boolean
 }) {
 	const colors = getAgentColorSet(agents, turn.agentId)
+	const turnAgent = turn.agentId ? agents.find((a) => a.id === turn.agentId) : agents[0]
+	const turnModelLabel = formatAgentModelLabel(turnAgent?.model, turnAgent?.subagentType)
+	const turnModelFamily = normalizeModelFamily(turnAgent?.model)
 
 	const toolResultMap = useMemo(() => {
 		const map = new Map<string, Event>()
@@ -219,8 +237,11 @@ export function TurnView({
 			{!hideAgentLabel && agents.length > 1 && (
 				<div className="flex items-center gap-2 mb-2">
 					<span className="w-2 h-2 rounded-full" style={{backgroundColor: colors.dot}} />
-					<span className={`text-xs font-medium ${colors.text}`}>
-						{turn.agentName ?? turn.agentId?.slice(0, 10) ?? "main"}
+					<span className="flex flex-col min-w-0">
+						<span className={`text-xs font-medium ${colors.text}`}>
+							{turn.agentName ?? turn.agentId?.slice(0, 10) ?? "main"}
+						</span>
+						{turnModelLabel && <span className="text-[10px] text-zinc-500">{turnModelLabel}</span>}
 					</span>
 				</div>
 			)}
@@ -269,6 +290,7 @@ export function TurnView({
 									event={event}
 									isActive={isActive}
 									onClick={() => onSelectEvent(event)}
+									model={turnModelFamily}
 								/>
 							)
 						case SESSION_EVENT_TYPE.AGENT_SPAWN:

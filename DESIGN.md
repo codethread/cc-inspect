@@ -84,7 +84,7 @@ The outline's visible/hidden state is persisted in `localStorage` under `cc-insp
 When a session includes sub-agents (spawned via the Task tool), their events are visually grouped into bordered, indented sections distinct from the main agent's flow.
 
 Each subagent section:
-- Has a **coloured header** showing the agent's description (from the Task tool call), falling back to name, subagentType, then truncated ID
+- Has a **coloured header** showing the agent's description (from the Task tool call), falling back to name, subagentType, then truncated ID. A **second line** shows the model family and subagent type (e.g. "haiku · explore", "sonnet · browser-user", or just "opus") when available.
 - Is **indented** with a left margin and a rounded border in the agent's colour
 - Is **collapsed by default** with an expand/collapse chevron toggle. The global **expand agents** toggle in the filter drawer controls the default state.
 - Has a **drilldown button** (expand icon) that opens a full-width drilldown view scoped to that agent (see Subagent drilldown below)
@@ -102,10 +102,10 @@ Within each turn, events are organized:
 
 - **User messages**: Rendered as plain text, truncated to 3 lines with `line-clamp-3`. Click to view full content in the detail panel.
   Native Claude Code plan handoffs (`ExitPlanMode` accepted into a new session) render as a green-tinted "Plan Handoff" card instead of a generic interrupted user/error sequence. When the linked follow-up session can be resolved, the card offers an "Open session" action.
-- **Assistant messages**: Truncated to 3 lines. Click to view full content in the detail panel.
-- **Thinking blocks**: Shown as a muted italic single line. Click to view full content in the detail panel.
+- **Assistant messages**: Truncated to 3 lines. Shows the **model family** (opus/sonnet/haiku) next to the "Assistant" label. Click to view full content in the detail panel.
+- **Thinking blocks**: Shown as a muted italic single line. Shows the **model family** next to the "Thinking" label. Click to view full content in the detail panel.
 - **Tool call groups**: Consecutive tool-use/tool-result events are grouped into an accordion (see below).
-- **Agent spawns**: Shown as a distinctive orange-tinted card with agent description.
+- **Agent spawns**: Shown as a distinctive orange-tinted card with agent description and **model family** badge.
 - **Summaries**: Shown as muted text blocks, truncated to 3 lines.
 
 ### Tool call grouping (accordions)
@@ -127,7 +127,7 @@ The right panel is always present:
 
 - **When nothing is selected**: Shows a placeholder with instructions
 - **When an event is selected**: Shows full details including:
-  - Event metadata (agent name, timestamp)
+  - Event metadata (agent name, model family + subagent type label, timestamp)
   - Header `copy id` action for the selected event ID
   - A help popover next to `copy id` with an event-specific `jq` command targeting the current session file, plus a copy action for that command
   - Copy icons next to each displayed detail block (message markdown, tool JSON input, tool output, summaries, prompts, etc.) so each block can be copied independently
@@ -163,6 +163,7 @@ A slide-out filter drawer (triggered from the header) provides:
 
 - **Display toggles** — control default expanded/collapsed state for tool call accordions and agent sections. Both default to collapsed. Changes persist to `localStorage`.
 - **Text search** — matches against event summaries, agent names, event types, and tool input values (bash commands, file paths, grep patterns, etc.)
+- **Model filter** — toggle buttons for each model family present in the session (opus/sonnet/haiku). All active by default (empty set = all). Model strings are bucketed by family name regardless of version.
 - **Event type toggles** — include (focus) or exclude (hide) specific event types independently
 - **Agent selection** — filter events to specific agents
 - **Errors only toggle** — shows only failed tool-result events and their linked tool-use events. Also available as a red-tinted button in the header for quick access.
@@ -272,7 +273,7 @@ During tailing, subagent sections render differently based on completion state:
 
 Available in both live tailing and static modes. Clicking the drilldown button on any subagent section replaces the main timeline with:
 
-- **Breadcrumb bar**: "Main Agent › [agent label]". Clicking "Main Agent" returns to the main timeline at the same scroll position.
+- **Breadcrumb bar**: "Main Agent › [agent label]" with model family and subagent type below the label. Clicking "Main Agent" returns to the main timeline at the same scroll position.
 - **Agent timeline**: events filtered to the target agent, grouped into turns, rendered with `TurnView`.
 - **No outline sidebar or filter drawer** in drilldown mode.
 - **Completion indicator** (tailing only): spinner while in-progress, checkmark when complete. The user stays in drilldown when the agent completes.

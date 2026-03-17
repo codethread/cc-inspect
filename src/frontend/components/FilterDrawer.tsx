@@ -6,27 +6,33 @@ import {getAgentColorSet} from "./session-view/agent-colors"
 import {EVENT_TYPES} from "./session-view/helpers"
 import {Sheet, SheetContent} from "./ui/sheet"
 
+const MODEL_FAMILIES = ["opus", "sonnet", "haiku"] as const
+
 export function FilterDrawer({
 	open,
 	onClose,
 	agents,
 	errorCount,
+	availableModels,
 }: {
 	open: boolean
 	onClose: () => void
 	agents: AgentNode[]
 	errorCount: number
+	availableModels: Set<string>
 }) {
 	const {
 		search,
 		typeInclude,
 		typeExclude,
 		agentFilter,
+		modelFilter,
 		errorsOnly,
 		setSearch,
 		setTypeInclude,
 		setTypeExclude,
 		setAgentFilter,
+		setModelFilter,
 		setErrorsOnly,
 	} = useFilterStore()
 
@@ -40,6 +46,13 @@ export function FilterDrawer({
 		if (next.has(id)) next.delete(id)
 		else next.add(id)
 		setAgentFilter(next)
+	}
+
+	const toggleModel = (family: string) => {
+		const next = new Set(modelFilter)
+		if (next.has(family)) next.delete(family)
+		else next.add(family)
+		setModelFilter(next)
 	}
 
 	const typeLabels: Record<EventType, string> = {
@@ -150,6 +163,43 @@ export function FilterDrawer({
 								<span className="w-2 h-2 rounded-full bg-red-400 flex-shrink-0" />
 								Show only failures ({errorCount})
 							</button>
+						</div>
+					)}
+
+					{/* Model filter */}
+					{availableModels.size > 0 && (
+						<div>
+							<div className="flex items-center justify-between mb-2">
+								<span className="text-xs font-medium text-zinc-400">Model</span>
+								{modelFilter.size > 0 && (
+									<button
+										type="button"
+										onClick={() => setModelFilter(new Set())}
+										className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors cursor-pointer"
+									>
+										Reset
+									</button>
+								)}
+							</div>
+							<div className="flex flex-wrap gap-1.5">
+								{MODEL_FAMILIES.filter((f) => availableModels.has(f)).map((family) => {
+									const active = modelFilter.size === 0 || modelFilter.has(family)
+									return (
+										<button
+											key={family}
+											type="button"
+											onClick={() => toggleModel(family)}
+											className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+												active
+													? "bg-zinc-800 text-zinc-200"
+													: "text-zinc-600 hover:text-zinc-400 hover:bg-zinc-800/50"
+											}`}
+										>
+											{family}
+										</button>
+									)
+								})}
+							</div>
 						</div>
 					)}
 

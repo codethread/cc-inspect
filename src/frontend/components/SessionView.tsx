@@ -20,7 +20,7 @@ import {SubagentDrilldown} from "./SubagentDrilldown"
 import {SubagentSectionView} from "./SubagentSectionView"
 import {matchesFilters} from "./session-view/filtering"
 import {groupIntoTurns, groupTurnsIntoSections} from "./session-view/grouping"
-import {formatDateTime} from "./session-view/helpers"
+import {formatDateTime, normalizeModelFamily} from "./session-view/helpers"
 import {
 	clampPanelSize,
 	getPanelBreakpoint,
@@ -120,7 +120,7 @@ export function SessionView() {
 		setDrilldownAgentId,
 	} = useUIStore()
 
-	const {search, typeInclude, typeExclude, agentFilter, errorsOnly, clearFilters} = useFilterStore()
+	const {search, typeInclude, typeExclude, agentFilter, modelFilter, errorsOnly, clearFilters} = useFilterStore()
 	const setErrorsOnly = useFilterStore((s) => s.setErrorsOnly)
 
 	const {selectedEvent, activeTurnId, setSelectedEvent, setActiveTurnId} = useSelectionStore()
@@ -228,6 +228,39 @@ export function SessionView() {
 		return {errorCount: count, failedToolUseIds: ids}
 	}, [sessionData])
 
+	const agentModelMap = useMemo(() => {
+		const map = new Map<string, string>()
+		for (const a of agents) {
+			const family = normalizeModelFamily(a.model)
+			if (family) map.set(a.id, family)
+		}
+		// Main agent (agentId null → empty string key)
+		if (agents[0]) {
+			const family = normalizeModelFamily(agents[0].model)
+			if (family) map.set("", family)
+		}
+		return map
+	}, [agents])
+
+	const availableModels = useMemo(() => {
+		const models = new Set<string>()
+		// From agents
+		for (const family of agentModelMap.values()) {
+			models.add(family)
+		}
+		// From individual events (covers mid-session model switches)
+		if (sessionData) {
+			for (const e of sessionData.allEvents) {
+				const data = e.data
+				if ("model" in data && data.model) {
+					const family = normalizeModelFamily(data.model as string)
+					if (family) models.add(family)
+				}
+			}
+		}
+		return models
+	}, [agentModelMap, sessionData])
+
 	const filteredEvents = useMemo(
 		() =>
 			sessionData
@@ -237,12 +270,14 @@ export function SessionView() {
 							typeInclude,
 							typeExclude,
 							agentFilter,
+							modelFilter,
 							errorsOnly,
 							failedToolUseIds,
+							agentModelMap,
 						}),
 					)
 				: [],
-		[sessionData, search, typeInclude, typeExclude, agentFilter, errorsOnly, failedToolUseIds],
+		[sessionData, search, typeInclude, typeExclude, agentFilter, modelFilter, errorsOnly, failedToolUseIds, agentModelMap],
 	)
 
 	const turns = useMemo(() => groupIntoTurns(filteredEvents, mainAgentId), [filteredEvents, mainAgentId])
@@ -575,7 +610,7 @@ export function SessionView() {
 	)
 
 	const isFiltered =
-		search || typeInclude.size > 0 || typeExclude.size > 0 || agentFilter.size > 0 || errorsOnly
+		search || typeInclude.size > 0 || typeExclude.size > 0 || agentFilter.size > 0 || modelFilter.size > 0 || errorsOnly
 
 	return (
 		<div
@@ -987,6 +1022,7 @@ export function SessionView() {
 					onClose={() => setFilterOpen(false)}
 					agents={agents}
 					errorCount={errorCount}
+					availableModels={availableModels}
 				/>
 			)}
 
