@@ -70,7 +70,7 @@ export function SubagentSectionView({
 		if (!isComplete) {
 			// In-progress: collapsed header with spinner, clickable to drilldown
 			return (
-				<div className={`ml-3 pl-4 border rounded-xl py-3 pr-4 ${colors.bg} ${colors.border} animate-pulse`}>
+				<div data-agent-section={section.agentId} className={`ml-3 pl-4 border rounded-xl py-3 pr-4 ${colors.bg} ${colors.border} animate-pulse`}>
 					<button
 						type="button"
 						onClick={() => onDrilldown?.(section.agentId)}
@@ -99,7 +99,7 @@ export function SubagentSectionView({
 
 		// Completed: collapsed header with expand toggle
 		return (
-			<div className={`ml-3 pl-4 border rounded-xl py-3 pr-4 ${colors.bg} ${colors.border}`}>
+			<div data-agent-section={section.agentId} className={`ml-3 pl-4 border rounded-xl py-3 pr-4 ${colors.bg} ${colors.border}`}>
 				<div className="flex items-center gap-2">
 					<span className="w-2 h-2 rounded-full flex-shrink-0" style={{backgroundColor: colors.dot}} />
 					<AgentLabel label={label} modelLabel={modelLabel} colorClass={colors.text} />
@@ -171,7 +171,7 @@ export function SubagentSectionView({
 
 	// Static (non-tailing) mode: collapsible with drilldown
 	return (
-		<div className={`ml-3 pl-4 border rounded-xl py-3 pr-4 ${colors.bg} ${colors.border}`}>
+		<div data-agent-section={section.agentId} className={`ml-3 pl-4 border rounded-xl py-3 pr-4 ${colors.bg} ${colors.border}`}>
 			<div className="flex items-center gap-2">
 				<span className="w-2 h-2 rounded-full flex-shrink-0" style={{backgroundColor: colors.dot}} />
 				<AgentLabel label={label} modelLabel={modelLabel} colorClass={colors.text} />

@@ -575,16 +575,19 @@ export function SessionView() {
 			if (el) {
 				el.scrollIntoView({behavior: "smooth", block: "start"})
 			} else if (sessionData) {
-				// Turn not in DOM — likely inside a collapsed agent. Find the agent and drilldown.
+				// Turn not in DOM — likely inside a collapsed agent section. Scroll to the section container.
 				const turn = turns.find((t) => t.id === turnId)
 				const agentId = turn?.events[0]?.agentId
 				if (agentId && agentId !== mainAgentId) {
-					handleDrilldown(agentId)
+					const sectionEl = timelineRef.current?.querySelector(`[data-agent-section="${agentId}"]`)
+					if (sectionEl) {
+						sectionEl.scrollIntoView({behavior: "smooth", block: "start"})
+					}
 				}
 			}
 			setActiveTurnId(turnId)
 		},
-		[setActiveTurnId, sessionData, turns, mainAgentId, handleDrilldown],
+		[setActiveTurnId, sessionData, turns, mainAgentId],
 	)
 
 	const handleSelectSession = useCallback(
