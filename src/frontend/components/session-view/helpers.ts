@@ -36,7 +36,8 @@ export function formatDateTime(date: Date): string {
 	return `${date.toLocaleDateString("en-US", {month: "short", day: "numeric"})} ${formatTime(date)}`
 }
 
-export function formatProjectName(directory: string): string {
+export function formatProjectName(directory: string, displayNames?: Record<string, string>): string {
+	if (displayNames?.[directory]) return displayNames[directory]
 	const parts = directory.replace(/^-/, "").split("-")
 	return parts.slice(-2).join("/")
 }

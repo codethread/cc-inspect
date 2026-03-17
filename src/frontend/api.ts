@@ -54,7 +54,7 @@ export function useDirectories() {
 		queryKey: ["directories"],
 		queryFn: async () => {
 			const data = await fetchApi<DirectoriesResponse>("/api/directories")
-			if (data.status === "success") return data.directories
+			if (data.status === "success") return {directories: data.directories, displayNames: data.displayNames}
 			throw new Error("Unexpected response")
 		},
 	})

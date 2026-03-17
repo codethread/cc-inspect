@@ -15,7 +15,9 @@ export function SessionPicker({
 }) {
 	const [sessionPath] = useQueryState("session", {defaultValue: ""})
 	const {open, dir, setOpen, setDir} = usePickerStore()
-	const {data: directories = []} = useDirectories()
+	const {data: dirData} = useDirectories()
+	const directories = dirData?.directories ?? []
+	const displayNames: Record<string, string> = dirData?.displayNames ?? {}
 	const {data: sessions = [], isLoading} = useSessions(dir)
 	const activeSession = sessions.find((s) => s.sessionFilePath === sessionPath)
 
@@ -44,7 +46,7 @@ export function SessionPicker({
 					</svg>
 					{sessionData ? (
 						<span className="flex items-center gap-2">
-							{dir && <span className="text-xs text-zinc-500">{formatProjectName(dir)}</span>}
+							{dir && <span className="text-xs text-zinc-500">{formatProjectName(dir, displayNames)}</span>}
 							<span className="font-mono text-xs">{sessionData.sessionId.slice(0, 14)}</span>
 							{activeSession?.customTitle && (
 								<span className="text-xs text-zinc-400 truncate max-w-40" title={activeSession.customTitle}>
@@ -71,7 +73,7 @@ export function SessionPicker({
 						<option value="">Select project...</option>
 						{directories.map((d) => (
 							<option key={d} value={d}>
-								{formatProjectName(d)}
+								{formatProjectName(d, displayNames)}
 							</option>
 						))}
 					</select>

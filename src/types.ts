@@ -9,7 +9,7 @@ export * from "./lib/claude"
 // App-level API response types (server <-> frontend contract)
 
 export const DirectoriesResponseSchema = z.discriminatedUnion("status", [
-	z.object({status: z.literal("success"), directories: z.array(z.string())}),
+	z.object({status: z.literal("success"), directories: z.array(z.string()), displayNames: z.record(z.string(), z.string())}),
 	z.object({status: z.literal("error"), error: z.string()}),
 ])
 
