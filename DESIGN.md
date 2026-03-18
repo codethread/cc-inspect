@@ -84,7 +84,7 @@ The outline's visible/hidden state is persisted in `localStorage` under `cc-insp
 When a session includes sub-agents (spawned via the Task tool), their events are visually grouped into bordered, indented sections distinct from the main agent's flow.
 
 Each subagent section:
-- Has a **coloured header** showing the agent's description (from the Task tool call), falling back to name, subagentType, then truncated ID. A **second line** shows the model family and subagent type (e.g. "haiku · explore", "sonnet · browser-user", or just "opus") when available.
+- Has a **coloured header** showing the agent's description (from the Task tool call), falling back to name, subagentType, then truncated ID. A **second line** shows the model family, subagent type, and total token count (e.g. "haiku · explore · 42k", "sonnet · browser-user · 86k") when available.
 - Is **indented** with a left margin and a rounded border in the agent's colour
 - Is **collapsed by default** with an expand/collapse chevron toggle. The global **expand agents** toggle in the filter drawer controls the default state.
 - Has a **drilldown button** (expand icon) that opens a full-width drilldown view scoped to that agent (see Subagent drilldown below)

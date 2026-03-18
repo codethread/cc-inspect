@@ -191,6 +191,7 @@ function mergeEvents(
 						model: update.model,
 						description: update.description,
 						subagentType: update.subagentType,
+						totalTokens: update.totalTokens ?? c.totalTokens,
 					}
 				: c
 		}),

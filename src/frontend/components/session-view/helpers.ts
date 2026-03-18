@@ -183,6 +183,21 @@ export function formatAgentModelLabel(
 }
 
 /**
+ * Format a token count as a compact string, e.g. 1234 → "1.2k", 85642 → "86k", 1200000 → "1.2M".
+ */
+export function formatTokenCount(tokens: number): string {
+	if (tokens >= 1_000_000) {
+		const m = tokens / 1_000_000
+		return m >= 10 ? `${Math.round(m)}M` : `${+m.toFixed(1)}M`
+	}
+	if (tokens >= 1_000) {
+		const k = tokens / 1_000
+		return k >= 10 ? `${Math.round(k)}k` : `${+k.toFixed(1)}k`
+	}
+	return `${tokens}`
+}
+
+/**
  * Resolve the model family for an event.
  * Checks event-level model first (assistant/user messages), then falls back to agent-level model.
  */

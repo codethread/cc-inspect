@@ -455,6 +455,7 @@ async function buildAgentTree(options: {
 			logPath,
 			isResumed: agentInfo.isResumed,
 			resumedFrom: agentInfo.resumedFrom,
+			totalTokens: agentInfo.totalTokens,
 		}
 
 		mainAgent.children.push(agentNode)
@@ -473,20 +474,31 @@ interface AgentInfo {
 interface ExtendedAgentInfo extends AgentInfo {
 	isResumed?: boolean
 	resumedFrom?: string
+	totalTokens?: number
 }
 
 export function extractAgentInfo(logEntries: LogEntry[], agentId: string): ExtendedAgentInfo {
-	// First, find the result entry that contains this agentId
-	const resultEntry = logEntries.find((e) => {
+	// Find all result entries for this agent (multiple for resumed agents)
+	const resultEntries = logEntries.filter((e) => {
 		if (e.type !== CLAUDE_LOG_ENTRY_TYPE.USER) return false
 		const result = normalizeToolUseResult(e.toolUseResult)
 		return result?.agentId === agentId
 	})
 
+	const resultEntry = resultEntries[0]
 	const normalizedResult = resultEntry ? normalizeToolUseResult(resultEntry.toolUseResult) : undefined
 
 	if (!resultEntry || !normalizedResult) {
 		return {name: agentId}
+	}
+
+	// Sum totalTokens across all invocations (initial + resumes)
+	let totalTokens: number | undefined
+	for (const entry of resultEntries) {
+		const result = normalizeToolUseResult(entry.toolUseResult)
+		if (result?.totalTokens != null) {
+			totalTokens = (totalTokens ?? 0) + result.totalTokens
+		}
 	}
 
 	// Find the tool_result in the message content to get the tool_use_id
@@ -508,6 +520,7 @@ export function extractAgentInfo(logEntries: LogEntry[], agentId: string): Exten
 			name: shortName,
 			model: undefined,
 			description: shortName,
+			totalTokens,
 		}
 	}
 
@@ -530,6 +543,7 @@ export function extractAgentInfo(logEntries: LogEntry[], agentId: string): Exten
 						description: shortDescription,
 						isResumed: isResume && resumesAgentId === agentId,
 						resumedFrom: isResume && resumesAgentId === agentId ? toolUse.id : undefined,
+						totalTokens,
 					}
 				}
 			}
@@ -542,6 +556,7 @@ export function extractAgentInfo(logEntries: LogEntry[], agentId: string): Exten
 		name: shortName,
 		model: undefined,
 		description: shortName,
+		totalTokens,
 	}
 }
 

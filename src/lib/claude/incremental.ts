@@ -151,5 +151,6 @@ export function buildAgentNode(agentId: string, state: IncrementalParseState): A
 		logPath: "",
 		isResumed: agentInfo.isResumed,
 		resumedFrom: agentInfo.resumedFrom,
+		totalTokens: agentInfo.totalTokens,
 	}
 }

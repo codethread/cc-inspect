@@ -256,6 +256,7 @@ export type AgentNode = {
 	logPath: string
 	isResumed?: boolean
 	resumedFrom?: string // Tool use ID that resumed this agent
+	totalTokens?: number
 }
 
 export const AgentNodeSchema = z.lazy(() =>
@@ -271,6 +272,7 @@ export const AgentNodeSchema = z.lazy(() =>
 		logPath: z.string(),
 		isResumed: z.boolean().optional(),
 		resumedFrom: z.string().optional(),
+		totalTokens: z.number().optional(),
 	}),
 )
 

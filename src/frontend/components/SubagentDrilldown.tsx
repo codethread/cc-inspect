@@ -1,7 +1,7 @@
 import type {AgentNode, Event, SessionData} from "#types"
 import {getAgentColorSet} from "./session-view/agent-colors"
 import {groupIntoTurns} from "./session-view/grouping"
-import {formatAgentModelLabel, getPendingTaskDescriptions, isAgentComplete} from "./session-view/helpers"
+import {formatAgentModelLabel, formatTokenCount, getPendingTaskDescriptions, isAgentComplete} from "./session-view/helpers"
 import {TurnView} from "./TurnView"
 import {TurnWrapper} from "./TurnWrapper"
 
@@ -74,7 +74,11 @@ export function SubagentDrilldown({
 					<span className="w-2 h-2 rounded-full flex-shrink-0" style={{backgroundColor: colors.dot}} />
 					<span className="flex flex-col min-w-0">
 						<span className="font-semibold uppercase tracking-wide text-xs">{label}</span>
-						{modelLabel && <span className="text-[10px] text-zinc-500 tracking-wide">{modelLabel}</span>}
+						{(modelLabel || agentNode?.totalTokens != null) && (
+							<span className="text-[10px] text-zinc-500 tracking-wide">
+								{[modelLabel, agentNode?.totalTokens != null ? formatTokenCount(agentNode.totalTokens) : null].filter(Boolean).join(" · ")}
+							</span>
+						)}
 					</span>
 				</span>
 				{/* Completion status indicator */}
