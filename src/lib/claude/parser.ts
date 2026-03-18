@@ -768,14 +768,16 @@ export function parseEvents(
 						})
 					} else if (item.type === CLAUDE_CONTENT_TYPE.THINKING) {
 						const thinkingContent = item as ThinkingContent
-						events.push({
-							...baseEvent,
-							type: SESSION_EVENT_TYPE.THINKING as EventType,
-							data: {
-								type: SESSION_EVENT_TYPE.THINKING,
-								content: thinkingContent.thinking,
-							},
-						})
+						if (thinkingContent.thinking) {
+							events.push({
+								...baseEvent,
+								type: SESSION_EVENT_TYPE.THINKING as EventType,
+								data: {
+									type: SESSION_EVENT_TYPE.THINKING,
+									content: thinkingContent.thinking,
+								},
+							})
+						}
 					} else if (item.type === CLAUDE_CONTENT_TYPE.TOOL_USE) {
 						const toolUse = item as ToolUseContent
 						const isResume = (toolUse.name === "Task" || toolUse.name === "Agent") && "resume" in toolUse.input
