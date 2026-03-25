@@ -4,7 +4,6 @@ import type {
 	DirectoriesResponse,
 	Event,
 	SessionData,
-	SessionDataResponse,
 	SessionHandle,
 	SessionsResponse,
 } from "#types"
@@ -74,37 +73,7 @@ export function useSessions(directory: string) {
 	})
 }
 
-export function useSessionData(sessionPath: string) {
-	return useQuery<SessionData>({
-		queryKey: ["session", sessionPath],
-		queryFn: async () => {
-			const data = await fetchApi<SessionDataResponse>(`/api/session?path=${encodeURIComponent(sessionPath)}`)
-			if (data.status === "success") return rehydrateSessionData(data.data)
-			throw new Error("Unexpected response")
-		},
-		enabled: !!sessionPath,
-	})
-}
-
-export function useCliSession() {
-	return useQuery<SessionData | null>({
-		queryKey: ["cli-session"],
-		queryFn: async () => {
-			try {
-				const res = await fetch("/api/session")
-				const data: SessionDataResponse = await res.json()
-				if (data.status === "success") return rehydrateSessionData(data.data)
-				return null
-			} catch {
-				return null
-			}
-		},
-		retry: false,
-	})
-}
-
 interface AppConfig {
-	tailEnabled: boolean
 	sessionPath?: string
 }
 

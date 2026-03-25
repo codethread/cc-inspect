@@ -54,7 +54,7 @@ Thin layer that runs a Bun server with REST API endpoints consuming the Claude S
 
 Path traversal validation (`isValidDirectory`, `isValidSessionPath` in `utils.ts`) is a server security concern, not an SDK concern.
 
-CLI flags parsed with `util.parseArgs()`. `-s/--session` pre-validates via `claude.parseSession()`.
+CLI flags parsed with `util.parseArgs()`. `-s/--session` pre-validates via `claude.parseSession()` and auto-connects the WebSocket on mount.
 
 ### Type System (src/types.ts)
 
@@ -76,21 +76,19 @@ When adding or changing logged events/actions/messages, update this file first a
 
 React app that renders a single `SessionView` component — a structured document reader with turn grouping, outline sidebar, detail panel, search modal, and filter drawer. `SessionView` orchestrates rendering while UI state is centralized in Zustand stores under `src/frontend/stores`.
 
-The app uses TanStack Query (`@tanstack/react-query`) for data fetching, with query/mutation hooks defined in `src/frontend/api.ts`. The `QueryClientProvider` is set up in `frontend.tsx`. CLI-provided sessions are handled by a `useCliSession` hook that attempts to load `/api/session` without parameters. The API layer rehydrates `Date` objects from JSON responses.
-
-During live tailing, `SessionView` switches data source from TanStack Query to the tail store's WebSocket-fed `sessionData`. The `SubagentDrilldown` component provides a full-width drilldown view for in-progress subagents.
+The app uses TanStack Query (`@tanstack/react-query`) for the session picker (directory/session listing), with hooks in `src/frontend/api.ts`. Session data always flows through WebSocket streaming via the tail store — when a session is selected, the frontend connects to `/ws/session/tail` and receives a snapshot + incremental updates. There is no separate static fetch path. The `SubagentDrilldown` component provides a full-width drilldown view for in-progress subagents.
 
 **UI design and behaviour**: see `DESIGN.md` at the project root. This is the authoritative description of all layout, interactions, and event rendering — read it before working on the frontend, and update it whenever user-visible behaviour changes.
 
-### Live Tailing (src/lib/tail/, src/frontend/stores/tail-store.ts)
+### Streaming (src/lib/tail/, src/frontend/stores/tail-store.ts)
 
-Real-time streaming of session log events via WebSocket. Architecture:
+All session data flows through WebSocket streaming (always-on, not a separate mode). Architecture:
 
 - `FileTailer` — watches a single `.jsonl` file, emits complete lines via byte-offset tracking
 - `SessionTailer` — orchestrates multiple `FileTailer`s for one session, owns incremental parse state, fans out to WebSocket subscribers
 - `TailerRegistry` — singleton managing `SessionTailer` instances (shared per session path, capped at 10)
 - `/ws/session/tail` — WebSocket route for tail connections
-- `tail-store.ts` — frontend Zustand store with WebSocket connection state machine (`disconnected → connecting → connected → reconnecting`)
+- `tail-store.ts` — frontend Zustand store, single source of truth for session data, with WebSocket connection state machine (`disconnected → connecting → connected → reconnecting`)
 
 Protocol: client sends `{ path }`, server responds with a `snapshot` then incremental `events` messages. Supports reconnect via `resumeAfterSeq`.
 
@@ -123,7 +121,7 @@ Protocol: client sends `{ path }`, server responds with a `snapshot` then increm
 - `src/frontend/components/MarkdownContent.tsx` - Markdown renderer
 - `src/frontend/index.html` - HTML entry point that imports React app
 - `src/frontend/stores/` - Zustand stores for UI/filter/selection/accordion/picker/keybinding state
-- `src/frontend/stores/tail-store.ts` - Tailing state + WebSocket management
+- `src/frontend/stores/tail-store.ts` - Session data store + WebSocket streaming management
 
 ## Code style
 

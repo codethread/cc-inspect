@@ -4,7 +4,7 @@ import {useCallback, useEffect, useMemo, useRef, useState} from "react"
 import {useHotkeys} from "react-hotkeys-hook"
 import type {Event} from "#types"
 import {SESSION_EVENT_TYPE} from "../../lib/event-catalog"
-import {useCliSession, useConfig, useSessionData} from "../api"
+import {useConfig} from "../api"
 import {useFilterStore} from "../stores/filter-store"
 import {formatHotkey, SCOPES, useKeybindingsStore} from "../stores/keybindings-store"
 import {useSelectionStore} from "../stores/selection-store"
@@ -42,9 +42,9 @@ function collectAgents(node: import("#types").AgentNode): import("#types").Agent
 	return result
 }
 
-// During tailing, inject placeholder SubagentSections for agents that have been spawned
-// (AGENT_SPAWN event exists) but don't yet have any events in the timeline. This makes
-// in-progress agents visible as collapsed headers before their first event arrives.
+// Inject placeholder SubagentSections for agents that have been spawned (AGENT_SPAWN
+// event exists) but don't yet have any events in the timeline. This makes in-progress
+// agents visible as collapsed headers before their first event arrives.
 function injectPendingAgentSections(
 	sections: TurnSection[],
 	allEvents: import("#types").Event[],
@@ -127,14 +127,11 @@ export function SessionView() {
 
 	const getKeys = useKeybindingsStore((s) => s.getKeys)
 
-	const {data: sessionDataFromPath} = useSessionData(sessionPath)
-	const {data: cliSession} = useCliSession()
 	const {data: config} = useConfig()
 
 	const {
 		connection,
-		sessionData: tailData,
-		isIdle,
+		sessionData,
 		autoScroll,
 		newEventCount,
 		startTailing,
@@ -143,23 +140,39 @@ export function SessionView() {
 		resetNewEventCount,
 	} = useTailStore()
 
-	const isTailing = connection.status !== "disconnected"
-
-	const fetchedSessionData = sessionPath ? (sessionDataFromPath ?? null) : (cliSession ?? null)
-	const sessionData = isTailing ? (tailData ?? fetchedSessionData) : fetchedSessionData
+	const isConnected = connection.status !== "disconnected"
 
 	const resolvedSessionFilePath =
 		sessionPath || (sessionData ? `${sessionData.logDirectory}/${sessionData.sessionId}.jsonl` : null)
 
-	// Auto-start tailing when CLI config requests it
+	// Set session path from CLI config — the sessionPath effect handles connecting
 	const autoStartedRef = useRef(false)
 	useEffect(() => {
 		if (autoStartedRef.current) return
-		if (!config?.tailEnabled || !config.sessionPath) return
+		if (!config?.sessionPath) return
 		autoStartedRef.current = true
 		setSessionPath(config.sessionPath)
-		startTailing(config.sessionPath)
-	}, [config, setSessionPath, startTailing])
+	}, [config, setSessionPath])
+
+	// Start tailing whenever sessionPath changes (e.g. from picker or URL) or on initial mount
+	const prevSessionPathRef = useRef<string | null>(null)
+	useEffect(() => {
+		if (sessionPath === prevSessionPathRef.current) return
+		prevSessionPathRef.current = sessionPath
+		if (!sessionPath) return
+		stopTailing()
+		startTailing(sessionPath)
+	}, [sessionPath, startTailing, stopTailing])
+
+	// Reconnect after retry exhaustion — if we have a session but the connection dropped,
+	// retry after a cooldown so "always-on" streaming recovers without user intervention.
+	// Only fires when the sessionPath effect has already run (ref matches current path).
+	useEffect(() => {
+		if (!sessionPath || connection.status !== "disconnected") return
+		if (prevSessionPathRef.current !== sessionPath) return
+		const timer = setTimeout(() => startTailing(sessionPath), 5000)
+		return () => clearTimeout(timer)
+	}, [sessionPath, connection.status, startTailing])
 
 	// Track event count at the moment the first snapshot arrives (new-event baseline)
 	const initialEventCountRef = useRef<number | null>(null)
@@ -168,11 +181,11 @@ export function SessionView() {
 			initialEventCountRef.current = null
 			return
 		}
-		// Set baseline once, on the first snapshot after connect (tailData goes null → populated)
-		if (connection.status === "connected" && tailData && initialEventCountRef.current === null) {
-			initialEventCountRef.current = tailData.allEvents.length
+		// Set baseline once, on the first snapshot after connect (sessionData goes null → populated)
+		if (connection.status === "connected" && sessionData && initialEventCountRef.current === null) {
+			initialEventCountRef.current = sessionData.allEvents.length
 		}
-	}, [connection.status, tailData])
+	}, [connection.status, sessionData])
 
 	// Sentinel ref for auto-scroll
 	const sentinelRef = useRef<HTMLDivElement | null>(null)
@@ -180,18 +193,18 @@ export function SessionView() {
 	// Auto-scroll when new events arrive and autoScroll is enabled — only during active tailing
 	const allEventsLength = sessionData?.allEvents.length ?? 0
 	useEffect(() => {
-		if (!isTailing || !autoScroll || !sentinelRef.current) return
+		if (!isConnected || !autoScroll || !sentinelRef.current) return
 		// allEventsLength in deps triggers this when new events arrive
 		void allEventsLength
 		sentinelRef.current.scrollIntoView({behavior: "smooth"})
-	}, [isTailing, autoScroll, allEventsLength])
+	}, [isConnected, autoScroll, allEventsLength])
 
 	// Track scroll position to determine autoScroll intent — only the user
 	// physically scrolling to the bottom should re-enable autoScroll, not DOM
 	// growth from new events repositioning the sentinel into view.
 	useEffect(() => {
 		const el = timelineRef.current
-		if (!el || !isTailing) return
+		if (!el || !isConnected) return
 
 		const handleScroll = () => {
 			const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50
@@ -200,16 +213,16 @@ export function SessionView() {
 
 		el.addEventListener("scroll", handleScroll, {passive: true})
 		return () => el.removeEventListener("scroll", handleScroll)
-	}, [isTailing, setAutoScroll])
+	}, [isConnected, setAutoScroll])
 
 	// Helper to check if an event is "new" (arrived after initial snapshot)
 	const isNewEvent = useCallback(
 		(eventId: string): boolean => {
-			if (!isTailing || initialEventCountRef.current === null || !tailData) return false
-			const idx = tailData.allEvents.findIndex((e) => e.id === eventId)
+			if (!isConnected || initialEventCountRef.current === null || !sessionData) return false
+			const idx = sessionData.allEvents.findIndex((e) => e.id === eventId)
 			return idx >= initialEventCountRef.current
 		},
-		[isTailing, tailData],
+		[isConnected, sessionData],
 	)
 
 	const agents = useMemo(() => (sessionData ? collectAgents(sessionData.mainAgent) : []), [sessionData])
@@ -592,14 +605,13 @@ export function SessionView() {
 
 	const handleSelectSession = useCallback(
 		(path: string) => {
-			stopTailing()
 			void setSessionPath(path, {history: "push"})
 			setActiveTurnId(null)
 			setSelectedEvent(null)
 			setDrilldownAgentId(null)
 			pinnedEventIdRef.current = null
 		},
-		[stopTailing, setSessionPath, setActiveTurnId, setSelectedEvent, setDrilldownAgentId],
+		[setSessionPath, setActiveTurnId, setSelectedEvent, setDrilldownAgentId],
 	)
 
 	const handleSelectEvent = useCallback(
@@ -646,53 +658,11 @@ export function SessionView() {
 				</span>
 				<SessionPicker sessionData={sessionData} onSelect={handleSelectSession} />
 
-				{/* Tail toggle button */}
-				{(sessionData || isTailing) && (
-					<button
-						type="button"
-						onClick={() => {
-							if (isTailing) {
-								stopTailing()
-							} else if (resolvedSessionFilePath) {
-								startTailing(resolvedSessionFilePath)
-							}
-						}}
-						className="p-1.5 rounded-lg transition-colors cursor-pointer text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800"
-						title={isTailing ? "Stop live tailing" : "Start live tailing"}
-					>
-						{isTailing ? (
-							<svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-								<rect x="5" y="5" width="14" height="14" rx="2" />
-							</svg>
-						) : (
-							<svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-								<path d="M8 5v14l11-7z" />
-							</svg>
-						)}
-					</button>
-				)}
-
-				{/* LIVE badge */}
-				{isTailing && (
-					<span
-						className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border ${
-							isIdle
-								? "bg-zinc-500/15 text-zinc-400 border-zinc-500/30"
-								: connection.status === "reconnecting"
-									? "bg-amber-500/15 text-amber-400 border-amber-500/30"
-									: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
-						}`}
-					>
-						<span
-							className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-								isIdle
-									? "bg-zinc-400"
-									: connection.status === "reconnecting"
-										? "bg-amber-400"
-										: "bg-emerald-500 animate-pulse"
-							}`}
-						/>
-						{isIdle ? "IDLE" : connection.status === "reconnecting" ? "RECONNECTING" : "LIVE"}
+				{/* Connection status — only shown for transient states the user should know about */}
+				{connection.status === "reconnecting" && (
+					<span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border bg-amber-500/15 text-amber-400 border-amber-500/30">
+						<span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-amber-400" />
+						RECONNECTING
 					</span>
 				)}
 
@@ -892,9 +862,7 @@ export function SessionView() {
 							{/* Turns */}
 							{(() => {
 								const baseSections = groupTurnsIntoSections(turns, mainAgentId, agents)
-								return isTailing
-									? injectPendingAgentSections(baseSections, sessionData.allEvents, agents)
-									: baseSections
+								return injectPendingAgentSections(baseSections, sessionData.allEvents, agents)
 							})().map((section) => {
 								if (section.kind === "main") {
 									const turn = section.turn
@@ -927,7 +895,6 @@ export function SessionView() {
 											onTurnVisible={setActiveTurnId}
 											defaultToolsExpanded={allToolsExpanded}
 											defaultAgentsExpanded={allAgentsExpanded}
-											isTailing={isTailing}
 											onDrilldown={handleDrilldown}
 										/>
 									</div>
@@ -939,7 +906,7 @@ export function SessionView() {
 						</div>
 					)}
 					{/* Floating scroll-to-bottom button — appears when tailing and user has scrolled up */}
-					{isTailing && !autoScroll && newEventCount > 0 && (
+					{isConnected && !autoScroll && newEventCount > 0 && (
 						<button
 							type="button"
 							onClick={() => {

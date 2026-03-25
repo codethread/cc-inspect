@@ -22,7 +22,6 @@ async function main() {
 		args: Bun.argv.slice(2),
 		options: {
 			session: {type: "string", short: "s"},
-			tail: {type: "boolean", short: "t"},
 			port: {type: "string", short: "p"},
 			help: {type: "boolean", short: "h"},
 		},
@@ -32,18 +31,16 @@ async function main() {
 	if (values.help) {
 		console.log(`cc-inspect - Visualize Claude Code session logs
 
-Usage: cc-inspect [--session <path-to-session.jsonl>] [--tail] [--port <port>]
+Usage: cc-inspect [--session <path-to-session.jsonl>] [--port <port>]
 
 Options:
   --session, -s  Path to session log file (optional - can select via UI)
-  --tail, -t     Enable live tailing mode (requires --session)
   --port, -p     Port to bind (default: PORT env var or 5555)
   --help, -h     Show this help message
 
 Examples:
   cc-inspect                                        # Start server with UI selector
   cc-inspect -s ~/.claude/projects/-Users-foo/session-id.jsonl  # Load specific session
-  cc-inspect -s ~/.claude/projects/-Users-foo/session-id.jsonl -t  # Live tail session
 `)
 		process.exit(0)
 	}
@@ -117,10 +114,8 @@ Examples:
 			"/api/session/delete": sessionDeleteHandler,
 			"/api/log": logHandler,
 			"/api/config": () => {
-				const tailEnabled = !!(values.tail && values.session)
 				return new Response(
 					JSON.stringify({
-						tailEnabled,
 						sessionPath: cliSessionPath,
 					}),
 					{headers: {"Content-Type": "application/json"}},
