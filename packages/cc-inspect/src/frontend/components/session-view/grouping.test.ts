@@ -85,7 +85,7 @@ describe("groupTurnEvents", () => {
 			expectedKinds: ["single"] satisfies Array<"tool-group" | "single">,
 		},
 	])("$name", ({turnEvents, pairedResultIds, expectedKinds}) => {
-		const items = groupTurnEvents(turnEvents, pairedResultIds)
+		const items = groupTurnEvents([...turnEvents], pairedResultIds)
 		expect(items.map((item) => item.kind)).toEqual(expectedKinds)
 	})
 })

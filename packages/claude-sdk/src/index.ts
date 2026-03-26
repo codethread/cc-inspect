@@ -90,7 +90,7 @@ export class Claude {
 			const lineStart = text.lastIndexOf("\n", idx) + 1
 			const lineEnd = text.indexOf("\n", idx)
 			const line = text.slice(lineStart, lineEnd === -1 ? undefined : lineEnd)
-			const parsed = JSON.parse(line)
+			const parsed = JSON.parse(line) as {type?: string; customTitle?: string}
 			if (parsed.type === "custom-title" && parsed.customTitle) {
 				return parsed.customTitle
 			}
@@ -109,5 +109,14 @@ export class Claude {
 // Re-export SDK types and classes
 export {ParseError} from "./errors"
 export type {FileReader} from "./parser"
-export {bunFileReader} from "./parser"
+export {bunFileReader, normalizeToolUseResult} from "./parser"
+export {
+	buildAgentNode,
+	createParseStateFromSession,
+	type IncrementalParseState,
+	parseLines,
+	processAgentEntries,
+	processMainEntries,
+} from "./incremental"
+export * from "./event-catalog"
 export * from "./types"

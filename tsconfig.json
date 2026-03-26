@@ -1,18 +1,7 @@
 {
-	"compilerOptions": {
-		"lib": ["ESNext", "DOM", "DOM.Iterable"],
-		"target": "ESNext",
-		"module": "Preserve",
-		"jsx": "react-jsx",
-		"noEmit": true,
-		"moduleResolution": "bundler",
-		"verbatimModuleSyntax": true,
-		"noUncheckedIndexedAccess": true,
-		"baseUrl": ".",
-		"paths": {
-			"@/*": ["./src/*"]
-		}
-	},
-	"include": ["src/**/*"],
-	"exclude": ["dist", "node_modules"]
+	"files": [],
+	"references": [
+		{"path": "packages/claude-sdk"},
+		{"path": "packages/cc-inspect"}
+	]
 }

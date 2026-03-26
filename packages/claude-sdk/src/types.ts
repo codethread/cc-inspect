@@ -6,7 +6,7 @@ import {
 	CLAUDE_LOG_ENTRY_TYPE,
 	SESSION_EVENT_TYPE,
 	SESSION_EVENT_TYPE_VALUES,
-} from "../event-catalog"
+} from "./event-catalog"
 
 // Base Zod schemas
 export const UsageSchema = z.object({

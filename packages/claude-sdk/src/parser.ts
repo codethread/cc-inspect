@@ -1,7 +1,7 @@
 // Parser for Claude Code session logs
 
 import {dirname, join} from "node:path"
-import {CLAUDE_CONTENT_TYPE, CLAUDE_LOG_ENTRY_TYPE, SESSION_EVENT_TYPE} from "../event-catalog"
+import {CLAUDE_CONTENT_TYPE, CLAUDE_LOG_ENTRY_TYPE, SESSION_EVENT_TYPE} from "./event-catalog"
 import {ParseError} from "./errors"
 import type {
 	AgentNode,

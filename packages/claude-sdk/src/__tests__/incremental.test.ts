@@ -147,7 +147,7 @@ describe("parseLines", () => {
 			expectedErrorCount: 0,
 		},
 	])("$label", ({lines, expectedEntryCount, expectedErrorCount}) => {
-		const result = parseLines(lines, "/test.jsonl", 1)
+		const result = parseLines([...lines], "/test.jsonl", 1)
 		expect(result.entries).toHaveLength(expectedEntryCount)
 		expect(result.errors).toHaveLength(expectedErrorCount)
 	})
@@ -170,7 +170,7 @@ describe("parseLines", () => {
 
 	it("skips empty strings in the lines array", () => {
 		const lines = ["", JSON.stringify(makeUserMessage("hello")), ""]
-		const result = parseLines(lines, "/test.jsonl", 1)
+		const result = parseLines([...lines], "/test.jsonl", 1)
 		expect(result.entries).toHaveLength(1)
 		expect(result.errors).toHaveLength(0)
 	})

@@ -3,16 +3,16 @@ import {readdir, stat} from "node:fs/promises"
 import {dirname, join} from "node:path"
 import type {ServerWebSocket} from "bun"
 import type {AgentNode, Event, SessionData, TailServerMessage} from "#types"
-import {Claude} from "../claude"
 import {
+	Claude,
 	buildAgentNode,
 	createParseStateFromSession,
 	type IncrementalParseState,
+	normalizeToolUseResult,
 	parseLines,
 	processAgentEntries,
 	processMainEntries,
-} from "../claude/incremental"
-import {normalizeToolUseResult} from "../claude/parser"
+} from "@codethread/claude-sdk"
 import {LOG_MESSAGE, LOG_MODULE} from "../event-catalog"
 import {getServerLogger} from "../log/server-instance"
 import {FileTailer} from "./file-tailer"

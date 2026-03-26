@@ -19,7 +19,7 @@ cc-inspect -s ~/.claude/projects/-Users-foo/session-id.jsonl
 <img alt="Image" src="https://github.com/user-attachments/assets/76ee5b47-58ca-4418-9102-6b81878ed470" />
 
 ## Installation
-For a manual setup, run `bun install`, `bun run build`, then `npm link`.
+For a manual setup, run `bun install` from the repo root, then `cd packages/cc-inspect && bun run build && npm link`.
 
 ## Usage
 
@@ -52,11 +52,11 @@ cc-inspect --help
 Start with hot reload:
 
 ```bash
-bun dev
+cd packages/cc-inspect && bun dev
 ```
 
 Run without linking:
 
 ```bash
-bun start
+cd packages/cc-inspect && bun start
 ```

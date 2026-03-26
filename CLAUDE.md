@@ -4,175 +4,169 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-cc-inspect is a web-based visualizer for Claude Code session logs. It parses `.jsonl` log files from `~/.claude/projects/` and displays them in an interactive timeline with agent hierarchies and event details.
+This is a Bun workspaces monorepo with two packages:
+
+- **`@codethread/claude-sdk`** (`packages/claude-sdk/`) — standalone SDK for parsing Claude Code `.jsonl` session logs
+- **`cc-inspect`** (`packages/cc-inspect/`) — web-based visualizer that consumes the SDK
+
+## Monorepo Structure
+
+```
+packages/
+  claude-sdk/          # @codethread/claude-sdk — publishable SDK
+  cc-inspect/          # cc-inspect app — server + frontend
+biome.json             # shared linter/formatter config
+tsconfig.json          # project references to both packages
+package.json           # workspace root
+```
 
 ## Common Commands
 
-- `bun dev` - Start development server with hot reload on port 5555
-- `bun start` - Run without hot reload
-- `cc-inspect --help` - Run the globally linked CLI (after `npm link`)
-- `bun test` - Run test suite with Bun's built-in test runner
-- `bun run fix` - Auto-fix issues with Biome (includes unsafe fixes)
-- `bun run verify` - Run all checks (typecheck + lint + format)
+Run from the **root**:
+- `bun install` — install all workspace dependencies
+
+Run from **`packages/cc-inspect/`**:
+- `bun dev` — start dev server with hot reload on port 5555
+- `bun start` — run without hot reload
+- `bun test` — run app test suite
+- `bun run verify` — typecheck + lint + format
+- `bun run fix` — auto-fix Biome issues
+
+Run from **`packages/claude-sdk/`**:
+- `bun test` — run SDK test suite
+- `bun run typecheck` — typecheck SDK
 
 ## Architecture
 
-### Claude SDK (src/lib/claude/)
+### Claude SDK (`packages/claude-sdk/`)
 
-Self-contained SDK for parsing Claude Code `.jsonl` session logs. Designed for future extraction as a standalone npm library.
+Self-contained SDK for parsing Claude Code `.jsonl` session logs. Published as `@codethread/claude-sdk`.
 
 **Public API** via the `Claude` class:
 
 ```ts
+import { Claude } from "@codethread/claude-sdk";
 const claude = new Claude({ path: "/absolute/path/to/projects/dir" });
-const projects: ProjectHandle[] = await claude.listProjects();
-const sessions: SessionHandle[] = await claude.listSessions(project);
-const sessionData: SessionData = await claude.parseSession(session);
+const projects = await claude.listProjects();
+const sessions = await claude.listSessions(project);
+const sessionData = await claude.parseSession(session);
 ```
+
+Also exports incremental parsing functions (`parseLines`, `processMainEntries`, `processAgentEntries`, `buildAgentNode`, `createParseStateFromSession`) used by the tail/streaming layer.
 
 **Files:**
 
-- `index.ts` — `Claude` class + re-exports (public entry point)
-- `types.ts` — All Zod schemas and inferred types for the log domain (LogEntry, Event, AgentNode, SessionData, ProjectHandle, SessionHandle)
-- `parser.ts` — Pure parsing functions (internal). Uses `FileReader` interface for dependency injection to enable testing without filesystem access
-- `errors.ts` — `ParseError` class with detailed debugging info (line numbers, Zod errors, actual values)
-- `__tests__/` — Test suite with fixtures derived from real session logs
+- `src/index.ts` — `Claude` class + re-exports (public entry point)
+- `src/types.ts` — Zod schemas and inferred types (LogEntry, Event, AgentNode, SessionData, etc.)
+- `src/parser.ts` — Pure parsing functions. Uses `FileReader` DI interface for testability
+- `src/incremental.ts` — Incremental parser for streaming JSONL processing
+- `src/errors.ts` — `ParseError` class with debugging info
+- `src/event-catalog.ts` — SDK-level constants (entry types, content types, event types)
+- `src/__tests__/` — Test suite with `.jsonl` fixtures
 
-**Key patterns:**
+### App (`packages/cc-inspect/`)
 
-- `FileReader` DI interface (`readText`, `exists`) abstracts file reading; `bunFileReader` is the default Bun implementation
-- `ProjectHandle` and `SessionHandle` are lightweight descriptors with pre-computed absolute paths
-- `listProjects`/`listSessions` use `node:fs/promises` directly; only `.jsonl` content parsing uses `FileReader`
+#### Server (`src/server/index.tsx`)
 
-### Server (src/server/index.tsx)
-
-Thin layer that runs a Bun server with REST API endpoints consuming the Claude SDK:
+Bun server with REST API endpoints consuming the SDK:
 
 - `/api/directories` — `claude.listProjects()` → directory IDs
 - `/api/sessions?directory=<dir>` — `claude.listSessions(project)` → session handles
 - `/api/session?path=<path>` — `claude.parseSession(session)` → full session data
 
-Path traversal validation (`isValidDirectory`, `isValidSessionPath` in `utils.ts`) is a server security concern, not an SDK concern.
+Path traversal validation in `utils.ts`. CLI flags via `util.parseArgs()`.
 
-CLI flags parsed with `util.parseArgs()`. `-s/--session` pre-validates via `claude.parseSession()` and auto-connects the WebSocket on mount.
+#### Type System (`src/types.ts`)
 
-### Type System (src/types.ts)
+Re-exports all SDK types via `export * from "@codethread/claude-sdk"` so the `#types` import alias works. Also defines app-level API response schemas as discriminated unions.
 
-Re-exports all SDK types via `export * from "./lib/claude"` so the `#types` import alias continues to work. Also defines app-level API response schemas (DirectoriesResponseSchema, SessionsResponseSchema, SessionDataResponseSchema) as discriminated unions for the server↔frontend contract.
+#### Event/Log Catalog (`src/lib/event-catalog.ts`)
 
-### Event/Log Catalog (src/lib/event-catalog.ts)
+Re-exports SDK domain constants and defines app-only constants:
 
-Single source of truth for:
-
-- Claude raw entry/content type names
-- Session event type names
 - Store keys, store action names, devtools/persist names
 - Client/server log module names
 - Canonical log message names
 
-When adding or changing logged events/actions/messages, update this file first and use its constants in code. For debugging with `jq`, prefer searching these catalog values instead of ad-hoc strings.
+When adding new logged events, update this file first.
 
-### Frontend (src/frontend/App.tsx, src/frontend/frontend.tsx)
+#### Frontend (`src/frontend/`)
 
-React app that renders a single `SessionView` component — a structured document reader with turn grouping, outline sidebar, detail panel, search modal, and filter drawer. `SessionView` orchestrates rendering while UI state is centralized in Zustand stores under `src/frontend/stores`.
+React app with `SessionView` component — structured document reader with turn grouping, outline sidebar, detail panel, search modal, and filter drawer. Uses TanStack Query for session picker and WebSocket streaming via the tail store.
 
-The app uses TanStack Query (`@tanstack/react-query`) for the session picker (directory/session listing), with hooks in `src/frontend/api.ts`. Session data always flows through WebSocket streaming via the tail store — when a session is selected, the frontend connects to `/ws/session/tail` and receives a snapshot + incremental updates. There is no separate static fetch path. The `SubagentDrilldown` component provides a full-width drilldown view for in-progress subagents.
+**UI design and behaviour**: see `DESIGN.md` in `packages/cc-inspect/`.
 
-**UI design and behaviour**: see `DESIGN.md` at the project root. This is the authoritative description of all layout, interactions, and event rendering — read it before working on the frontend, and update it whenever user-visible behaviour changes.
+#### Streaming (`src/lib/tail/`, `src/frontend/stores/tail-store.ts`)
 
-### Streaming (src/lib/tail/, src/frontend/stores/tail-store.ts)
+All session data flows through WebSocket streaming. Architecture:
 
-All session data flows through WebSocket streaming (always-on, not a separate mode). Architecture:
+- `FileTailer` — watches a single `.jsonl` file via byte-offset tracking
+- `SessionTailer` — orchestrates multiple `FileTailer`s, owns incremental parse state
+- `TailerRegistry` — singleton managing `SessionTailer` instances
+- `tail-store.ts` — frontend Zustand store with WebSocket connection state machine
 
-- `FileTailer` — watches a single `.jsonl` file, emits complete lines via byte-offset tracking
-- `SessionTailer` — orchestrates multiple `FileTailer`s for one session, owns incremental parse state, fans out to WebSocket subscribers
-- `TailerRegistry` — singleton managing `SessionTailer` instances (shared per session path, capped at 10)
-- `/ws/session/tail` — WebSocket route for tail connections
-- `tail-store.ts` — frontend Zustand store, single source of truth for session data, with WebSocket connection state machine (`disconnected → connecting → connected → reconnecting`)
-
-Protocol: client sends `{ path }`, server responds with a `snapshot` then incremental `events` messages. Supports reconnect via `resumeAfterSeq`.
-
-**Early subagent discovery**: `SessionTailer` watches the session agent directory with `node:fs` `watch` for new `agent-*.jsonl` files. When a file appears, the agent is registered and a `FileTailer` starts immediately — before the Task tool_result arrives in the main log. This makes in-progress subagents visible in real time. If the directory doesn't exist yet (no subagents spawned), a 1s poll retries until it appears. When the tool_result eventually arrives, `SessionTailer` refreshes the `AgentNode` metadata (name/description) and broadcasts the updated node to subscribers. The frontend `tail-store` handles both new-agent and metadata-update cases in `mergeEvents`.
+Early subagent discovery via `node:fs` directory watching.
 
 ## File Structure
 
-- `src/lib/claude/` - Self-contained Claude Code SDK (types, parser, errors, Claude class)
-- `src/lib/claude/__tests__/` - SDK test suite with .jsonl fixtures
-- `src/lib/tail/` - File/session tailing with state machines
-- `src/lib/tail/__tests__/` - Tailing test suite
-- `src/types.ts` - Re-exports SDK types + app-level API response schemas
-- `src/server/index.tsx` - Bun server entry point (CLI binary via shebang)
-- `src/server/routes/` - Thin route handlers using Claude SDK
-- `src/server/utils.ts` - Server-level path validation and constants
-- `src/frontend/App.tsx` - React app entry point, renders SessionView
-- `src/frontend/api.ts` - TanStack Query hooks, fetch helper, Date rehydration
-- `src/frontend/frontend.tsx` - React DOM mounting with QueryClientProvider
-- `src/frontend/components/SessionView.tsx` - Main layout component and orchestration
-- `src/frontend/components/SessionPicker.tsx` - Session/project dropdown
-- `src/frontend/components/Outline.tsx` - Left sidebar navigation
-- `src/frontend/components/FilterDrawer.tsx` - Slide-out filter panel
-- `src/frontend/components/SearchModal.tsx` - ⌘K full-text search modal
-- `src/frontend/components/DetailPanel.tsx` - Right-side event detail panel
-- `src/frontend/components/TurnView.tsx` - Turn renderer with all event block types
-- `src/frontend/components/ToolGroupAccordion.tsx` - Collapsible tool call group accordion
-- `src/frontend/components/SubagentSectionView.tsx` - Bordered subagent section wrapper
-- `src/frontend/components/SubagentDrilldown.tsx` - Subagent drilldown view
-- `src/frontend/components/session-view/` - Pure TS utilities: types, helpers, agent-colors, grouping, filtering
-- `src/frontend/components/MarkdownContent.tsx` - Markdown renderer
-- `src/frontend/index.html` - HTML entry point that imports React app
-- `src/frontend/stores/` - Zustand stores for UI/filter/selection/accordion/picker/keybinding state
-- `src/frontend/stores/tail-store.ts` - Session data store + WebSocket streaming management
+```
+packages/claude-sdk/src/
+  index.ts, types.ts, parser.ts, incremental.ts, errors.ts, event-catalog.ts
+  __tests__/                    # SDK tests + fixtures
+
+packages/cc-inspect/src/
+  types.ts                      # Re-exports SDK types + app API schemas
+  server/
+    index.tsx                   # Bun server entry point
+    routes/                     # Route handlers
+    utils.ts                    # Path validation
+  frontend/
+    App.tsx, frontend.tsx        # React app entry
+    api.ts                      # TanStack Query hooks
+    components/                 # SessionView, Outline, FilterDrawer, etc.
+    stores/                     # Zustand stores
+  lib/
+    event-catalog.ts            # App-level catalog (re-exports SDK constants)
+    tail/                       # File/session tailing
+    log/                        # Structured JSONL logging
+```
 
 ## Code style
 
 - Focus on pure functions with minimal side effects
-- Ensure functions minimise side effects and use dependency injection to maximise testability
-- Keep type purity, i.e ensure all unknown IO is validated through zod and then strictly parsed into discriminated union types where possible (we want the type system to encapsulate as much correctness as possible).
-- Code can make breaking changes, there is no public api or legacy behaviour - however all checks must pass for work to be considered finished
-- avoid index files and default exports, use named files and exports for clear usage patterns. Typescript namespaces are valid to group logical functions into a cohesive collection without the need for an object to hold them.
-- use inline interfaces for return types in most cases (or shared interfaces if applicable)
-- Frontend state rule: keep app/UI state in stores (`src/frontend/stores`) rather than component-local state. Persist only durable user preferences; keep session-specific state non-persistent.
-- this repo is Agent first, so all events should be logged to the development log file to allow debugging an introspection (log file is shown in `bun dev` output). Use `jq` and `rg` or Explore based subagents to obtain details.
+- Use dependency injection for testability
+- Validate unknown IO through Zod into discriminated union types
+- No legacy behaviour constraints — breaking changes are fine if checks pass
+- Named files and exports, no index files or default exports. TypeScript namespaces are valid for grouping.
+- Inline interfaces for return types (or shared if applicable)
+- Frontend state in stores (`src/frontend/stores`), not component-local state
+- Agent-first: log all events to the structured JSONL log for debugging
 
 ## Logging
 
-All logging goes through the structured JSONL log system. The dev log file path is shown in `bun dev` output — use `jq` and `rg` against it for debugging.
+All logging goes through the structured JSONL log system. Dev log path shown in `bun dev` output.
 
 ### Checklist for new code
 
-1. **Catalog first** — add entries to `src/lib/event-catalog.ts` before writing any log calls:
-   - `LOG_MODULE` for new domains (e.g. `TAIL: "tail"`, `ROUTES_TAIL: "routes.tail"`)
-   - `LOG_MESSAGE` for each loggable event (e.g. `TAIL_FILE_CHANGED: "tail.file.changed"`)
+1. **Catalog first** — add entries to `packages/cc-inspect/src/lib/event-catalog.ts`
 2. **Create logger at module top**:
-   - Server: `const log = () => getServerLogger(LOG_MODULE.X)` (thunk because init is deferred)
+   - Server: `const log = () => getServerLogger(LOG_MODULE.X)`
    - Client: `const log = createClientLogger(LOG_MODULE.X)`
-3. **Log at key lifecycle points** — start, success, error, state transitions:
-   - `log().info(LOG_MESSAGE.X, { path, count, id, ... })` for structured metadata
-   - `log().error(LOG_MESSAGE.X, { err: message, stack, data: { context } })` for errors
-   - Use **different message names** for different error types (e.g. `PARSE_ERROR` vs `FAILED_TO_PARSE`)
-4. **Use `timed()`** for async operations — it auto-records `dur_ms`:
-   ```ts
-   const result = await log().timed(LOG_MESSAGE.X, () => someAsyncOp(), { path })
-   ```
-5. **Log levels**: `debug` for internal state, `info` for lifecycle/operations, `warn` for recoverable issues, `error` for failures
-
-### Module naming
-
-Follow `domain.resource` dot-notation: `server`, `routes.session`, `routes.tail`, `tail.file`, `tail.session`, `api`, `store.ui`. Match existing patterns in the catalog.
+3. **Log at key lifecycle points** — start, success, error, state transitions
+4. **Use `timed()`** for async operations
+5. **Log levels**: `debug` internal, `info` lifecycle, `warn` recoverable, `error` failures
 
 ## State machines
 
-Components with distinct lifecycle states (e.g. connecting → connected → reconnecting) use a **discriminated union + pure transition** pattern rather than ad-hoc boolean flags or xstate:
+Discriminated union + pure transition pattern:
 
-1. **State union**: each variant on a `status` field, carrying only the data relevant to that state
-2. **Event union**: all inputs that can cause a transition
-3. **Effect union**: side effects to execute after transition (returned as data, not executed inline)
-4. **Pure `transition(state, event) → { state, effects[] }`**: exhaustive, no side effects
-5. **Single `dispatch(event)`**: the host class/store calls `transition()`, updates state, then runs effects
-
-This keeps state explicit and testable. Test transitions with `it.each` tables: `(state, event) → expectedStatus + expectedEffects`.
+1. State union on `status` field
+2. Event union for all inputs
+3. Effect union for side effects (returned as data)
+4. Pure `transition(state, event) → { state, effects[] }`
+5. Single `dispatch(event)` host
 
 ## Test style
 
-- tests should use tables, i.e it.each or similar. This aligns with pure functions that can assert on input and output
-- tests should try to reuse common factory functions to make refactors to inputs easier
+- Table-driven tests via `it.each`
+- Reuse common factory functions for input construction

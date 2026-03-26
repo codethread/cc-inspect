@@ -1,7 +1,7 @@
 import {join} from "node:path"
 import type {BunRequest} from "bun"
 import type {SessionsResponse} from "#types"
-import {Claude} from "../../lib/claude"
+import {Claude} from "@codethread/claude-sdk"
 import {CLAUDE_PROJECTS_DIR, isValidDirectory} from "../utils"
 
 // API endpoint to get list of session files in a directory

@@ -295,7 +295,7 @@ describe("extractMainAgentModel", () => {
 			expected: undefined,
 		},
 	])("$label", ({entries, expected}) => {
-		expect(extractMainAgentModel(entries)).toBe(expected)
+		expect(extractMainAgentModel([...entries])).toBe(expected)
 	})
 })
 

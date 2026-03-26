@@ -1,5 +1,5 @@
 import type {DirectoriesResponse} from "#types"
-import {Claude} from "../../lib/claude"
+import {Claude} from "@codethread/claude-sdk"
 import {CLAUDE_PROJECTS_DIR, resolveProjectDisplayName} from "../utils"
 
 // API endpoint to get list of project directories
