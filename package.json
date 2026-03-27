@@ -1,5 +1,8 @@
 {
   "name": "cc-inspect-monorepo",
   "private": true,
-  "workspaces": ["packages/*"]
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "dev": "bun run --cwd packages/cc-inspect dev"
+  }
 }

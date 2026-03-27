@@ -1,10 +1,10 @@
 // App-level types: re-exports SDK types + API response schemas
 
 import {z} from "zod"
-import {AgentNodeSchema, EventSchema, SessionDataSchema, SessionHandleSchema} from "@codethread/claude-sdk"
+import {AgentNodeSchema, EventSchema, SessionDataSchema, SessionHandleSchema} from "@codethread/claude-sdk/types"
 
-// Re-export all SDK types so #types alias continues to work for frontend
-export * from "@codethread/claude-sdk"
+// Re-export only types so the browser bundle never pulls in the SDK's node:path runtime
+export type * from "@codethread/claude-sdk/types"
 
 // App-level API response types (server <-> frontend contract)
 

@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./types": "./src/types.ts",
+    "./event-catalog": "./src/event-catalog.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

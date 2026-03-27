@@ -3,7 +3,7 @@ export {
 	CLAUDE_LOG_ENTRY_TYPE,
 	SESSION_EVENT_TYPE,
 	SESSION_EVENT_TYPE_VALUES,
-} from "@codethread/claude-sdk"
+} from "@codethread/claude-sdk/event-catalog"
 
 export const STORE_KEY = {
 	UI: "ui",
@@ -52,6 +52,7 @@ export const STORE_ACTION = {
 		SET_ALL_TOOLS_EXPANDED: "ui/setAllToolsExpanded",
 		SET_ALL_AGENTS_EXPANDED: "ui/setAllAgentsExpanded",
 		SET_DRILLDOWN_AGENT_ID: "ui/setDrilldownAgentId",
+		SET_DETAIL_RAW_VIEW: "ui/setDetailRawView",
 	},
 	FILTER: {
 		SET_SEARCH: "filter/setSearch",
