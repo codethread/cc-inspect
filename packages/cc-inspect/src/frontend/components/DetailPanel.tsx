@@ -1,7 +1,8 @@
-import {AlertCircleIcon, CheckIcon, CircleQuestionMarkIcon, CopyIcon} from "lucide-react"
+import {AlertCircleIcon, CheckIcon, CircleQuestionMarkIcon, CodeIcon, CopyIcon, EyeIcon} from "lucide-react"
 import {useEffect, useMemo, useState} from "react"
 import type {AgentNode, Event} from "#types"
 import {SESSION_EVENT_TYPE} from "../../lib/event-catalog"
+import {useUIStore} from "../stores/ui-store"
 import {MarkdownContent} from "./MarkdownContent"
 import {getAgentColorSet} from "./session-view/agent-colors"
 import {formatAgentModelLabel, formatTime} from "./session-view/helpers"
@@ -45,6 +46,16 @@ async function copyTextToClipboard(text: string): Promise<boolean> {
 	}
 }
 
+function RawText({children, className}: {children: string; className?: string}) {
+	return (
+		<pre
+			className={`whitespace-pre-wrap break-words font-mono bg-zinc-900 rounded-lg p-3 border border-zinc-800 ${className ?? ""}`}
+		>
+			{children}
+		</pre>
+	)
+}
+
 export function DetailPanel({
 	event,
 	allEvents,
@@ -69,6 +80,9 @@ export function DetailPanel({
 		eventId: null,
 		key: null,
 	})
+
+	const detailRawView = useUIStore((s) => s.detailRawView)
+	const setDetailRawView = useUIStore((s) => s.setDetailRawView)
 
 	const toolId = event?.data.type === SESSION_EVENT_TYPE.TOOL_USE ? event.data.toolId : null
 	const linkedResult = toolId
@@ -229,6 +243,23 @@ export function DetailPanel({
 						</pre>
 					</PopoverContent>
 				</Popover>
+				<button
+					type="button"
+					onClick={() => setDetailRawView(!detailRawView)}
+					className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs transition-colors cursor-pointer ml-1 ${
+						detailRawView
+							? "text-amber-300 bg-amber-500/15 hover:bg-amber-500/25"
+							: "text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800"
+					}`}
+					title={detailRawView ? "Switch to rendered view" : "Switch to raw view"}
+				>
+					{detailRawView ? (
+						<EyeIcon className="w-3 h-3" aria-hidden="true" />
+					) : (
+						<CodeIcon className="w-3 h-3" aria-hidden="true" />
+					)}
+					{detailRawView ? "rendered" : "raw"}
+				</button>
 				{onNavigate && (
 					<button
 						type="button"
@@ -281,18 +312,28 @@ export function DetailPanel({
 								)}
 							</div>
 						)}
-						<MarkdownContent className="text-zinc-200 text-sm leading-relaxed">
-							{event.data.text}
-						</MarkdownContent>
+						{detailRawView ? (
+							<RawText className="text-zinc-200 text-sm leading-relaxed">{event.data.text}</RawText>
+						) : (
+							<MarkdownContent className="text-zinc-200 text-sm leading-relaxed">
+								{event.data.text}
+							</MarkdownContent>
+						)}
 						{selectedPlanHandoff && (
 							<>
 								<div className="flex items-center justify-between mt-4 mb-1.5">
 									<div className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Plan</div>
 									{renderCopyIconButton("plan-handoff-plan", selectedPlanHandoff.plan, "Copy plan")}
 								</div>
-								<MarkdownContent className="text-zinc-300 text-sm leading-relaxed">
-									{selectedPlanHandoff.plan}
-								</MarkdownContent>
+								{detailRawView ? (
+									<RawText className="text-zinc-300 text-sm leading-relaxed">
+										{selectedPlanHandoff.plan}
+									</RawText>
+								) : (
+									<MarkdownContent className="text-zinc-300 text-sm leading-relaxed">
+										{selectedPlanHandoff.plan}
+									</MarkdownContent>
+								)}
 							</>
 						)}
 					</div>
@@ -304,9 +345,13 @@ export function DetailPanel({
 							<div className="text-xs font-semibold text-violet-400 uppercase tracking-wider">Assistant</div>
 							{renderCopyIconButton("assistant-message", event.data.text, "Copy assistant message")}
 						</div>
-						<MarkdownContent className="text-zinc-200 text-sm leading-relaxed">
-							{event.data.text}
-						</MarkdownContent>
+						{detailRawView ? (
+							<RawText className="text-zinc-200 text-sm leading-relaxed">{event.data.text}</RawText>
+						) : (
+							<MarkdownContent className="text-zinc-200 text-sm leading-relaxed">
+								{event.data.text}
+							</MarkdownContent>
+						)}
 					</div>
 				)}
 
@@ -421,9 +466,13 @@ export function DetailPanel({
 							<div className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Prompt</div>
 							{renderCopyIconButton("agent-spawn-prompt", event.data.prompt, "Copy agent prompt")}
 						</div>
-						<MarkdownContent className="text-zinc-300 text-sm leading-relaxed">
-							{event.data.prompt}
-						</MarkdownContent>
+						{detailRawView ? (
+							<RawText className="text-zinc-300 text-sm leading-relaxed">{event.data.prompt}</RawText>
+						) : (
+							<MarkdownContent className="text-zinc-300 text-sm leading-relaxed">
+								{event.data.prompt}
+							</MarkdownContent>
+						)}
 					</div>
 				)}
 
@@ -433,9 +482,13 @@ export function DetailPanel({
 							<div className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Summary</div>
 							{renderCopyIconButton("summary", event.data.summary, "Copy summary")}
 						</div>
-						<MarkdownContent className="text-zinc-400 text-sm leading-relaxed">
-							{event.data.summary}
-						</MarkdownContent>
+						{detailRawView ? (
+							<RawText className="text-zinc-400 text-sm leading-relaxed">{event.data.summary}</RawText>
+						) : (
+							<MarkdownContent className="text-zinc-400 text-sm leading-relaxed">
+								{event.data.summary}
+							</MarkdownContent>
+						)}
 					</div>
 				)}
 			</div>
