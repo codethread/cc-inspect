@@ -529,7 +529,11 @@ export function extractAgentInfo(logEntries: LogEntry[], agentId: string): Exten
 		if (entry.type === CLAUDE_LOG_ENTRY_TYPE.ASSISTANT && entry.message?.content) {
 			const content = Array.isArray(entry.message.content) ? entry.message.content : []
 			for (const item of content) {
-				if (item.type === CLAUDE_CONTENT_TYPE.TOOL_USE && item.id === toolUseId && (item.name === "Task" || item.name === "Agent")) {
+				if (
+					item.type === CLAUDE_CONTENT_TYPE.TOOL_USE &&
+					item.id === toolUseId &&
+					(item.name === "Task" || item.name === "Agent")
+				) {
 					const toolUse = item as ToolUseContent
 					// Check if this is a resume call
 					const isResume = "resume" in toolUse.input
@@ -795,7 +799,8 @@ export function parseEvents(
 						}
 					} else if (item.type === CLAUDE_CONTENT_TYPE.TOOL_USE) {
 						const toolUse = item as ToolUseContent
-						const isResume = (toolUse.name === "Task" || toolUse.name === "Agent") && "resume" in toolUse.input
+						const isResume =
+							(toolUse.name === "Task" || toolUse.name === "Agent") && "resume" in toolUse.input
 						const resumesAgentId = isResume ? (toolUse.input.resume as string) : undefined
 
 						events.push({

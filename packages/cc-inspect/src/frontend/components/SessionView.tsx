@@ -120,7 +120,16 @@ export function SessionView() {
 		setDrilldownAgentId,
 	} = useUIStore()
 
-	const {search, typeInclude, typeExclude, agentFilter, modelFilter, subagentTypeFilter, errorsOnly, clearFilters} = useFilterStore()
+	const {
+		search,
+		typeInclude,
+		typeExclude,
+		agentFilter,
+		modelFilter,
+		subagentTypeFilter,
+		errorsOnly,
+		clearFilters,
+	} = useFilterStore()
 	const setErrorsOnly = useFilterStore((s) => s.setErrorsOnly)
 
 	const {selectedEvent, activeTurnId, setSelectedEvent, setActiveTurnId} = useSelectionStore()
@@ -308,7 +317,19 @@ export function SessionView() {
 						}),
 					)
 				: [],
-		[sessionData, search, typeInclude, typeExclude, agentFilter, modelFilter, subagentTypeFilter, errorsOnly, failedToolUseIds, agentModelMap, agentSubagentTypeMap],
+		[
+			sessionData,
+			search,
+			typeInclude,
+			typeExclude,
+			agentFilter,
+			modelFilter,
+			subagentTypeFilter,
+			errorsOnly,
+			failedToolUseIds,
+			agentModelMap,
+			agentSubagentTypeMap,
+		],
 	)
 
 	const turns = useMemo(() => groupIntoTurns(filteredEvents, mainAgentId), [filteredEvents, mainAgentId])
@@ -469,6 +490,7 @@ export function SessionView() {
 	// search-selected event. Falls back to the turn that owns the event when
 	// the specific element isn't in the DOM (e.g. tool events inside collapsed
 	// accordions, or tool-results excluded from timeline rendering).
+	// biome-ignore lint/correctness/useExhaustiveDependencies: drilldownAgentId triggers re-scroll when subagent view mounts new DOM
 	useEffect(() => {
 		const eventId = pendingScrollToRef.current
 		if (!eventId) return
@@ -643,7 +665,13 @@ export function SessionView() {
 	)
 
 	const isFiltered =
-		search || typeInclude.size > 0 || typeExclude.size > 0 || agentFilter.size > 0 || modelFilter.size > 0 || subagentTypeFilter.size > 0 || errorsOnly
+		search ||
+		typeInclude.size > 0 ||
+		typeExclude.size > 0 ||
+		agentFilter.size > 0 ||
+		modelFilter.size > 0 ||
+		subagentTypeFilter.size > 0 ||
+		errorsOnly
 
 	return (
 		<div

@@ -3,7 +3,12 @@ import type {AgentNode, Event} from "#types"
 import {SESSION_EVENT_TYPE} from "../../lib/event-catalog"
 import {getAgentColorSet} from "./session-view/agent-colors"
 import {groupTurnEvents} from "./session-view/grouping"
-import {formatAgentModelLabel, formatTime, getEventSummary, normalizeModelFamily} from "./session-view/helpers"
+import {
+	formatAgentModelLabel,
+	formatTime,
+	getEventSummary,
+	normalizeModelFamily,
+} from "./session-view/helpers"
 import type {Turn} from "./session-view/types"
 import {ToolGroupAccordion} from "./ToolGroupAccordion"
 
@@ -29,6 +34,7 @@ function UserMessageBlock({
 	const continuedSessionId = event.data.planHandoff?.continuedSessionId
 	const isPlanHandoff = Boolean(event.data.planHandoff)
 	return (
+		// biome-ignore lint/a11y/useSemanticElements: div+role="button" avoids iOS Safari flex bug breaking line-clamp
 		<div
 			role="button"
 			tabIndex={0}
@@ -83,6 +89,7 @@ function AssistantMessageBlock({
 	if (event.data.type !== SESSION_EVENT_TYPE.ASSISTANT_MESSAGE) return null
 	const model = normalizeModelFamily(event.data.model)
 	return (
+		// biome-ignore lint/a11y/useSemanticElements: div+role="button" avoids iOS Safari flex bug breaking line-clamp
 		<div
 			role="button"
 			tabIndex={0}
@@ -116,6 +123,7 @@ function ThinkingBlock({
 }) {
 	if (event.data.type !== SESSION_EVENT_TYPE.THINKING) return null
 	return (
+		// biome-ignore lint/a11y/useSemanticElements: div+role="button" avoids iOS Safari flex bug breaking line-clamp
 		<div
 			role="button"
 			tabIndex={0}
@@ -140,6 +148,7 @@ function AgentSpawnBlock({event, isActive, onClick}: {event: Event; isActive: bo
 	if (event.data.type !== SESSION_EVENT_TYPE.AGENT_SPAWN) return null
 	const model = normalizeModelFamily(event.data.model)
 	return (
+		// biome-ignore lint/a11y/useSemanticElements: div+role="button" avoids iOS Safari flex bug breaking line-clamp
 		<div
 			role="button"
 			tabIndex={0}
@@ -165,6 +174,7 @@ function AgentSpawnBlock({event, isActive, onClick}: {event: Event; isActive: bo
 function SummaryBlock({event, isActive, onClick}: {event: Event; isActive: boolean; onClick: () => void}) {
 	if (event.data.type !== SESSION_EVENT_TYPE.SUMMARY) return null
 	return (
+		// biome-ignore lint/a11y/useSemanticElements: div+role="button" avoids iOS Safari flex bug breaking line-clamp
 		<div
 			role="button"
 			tabIndex={0}

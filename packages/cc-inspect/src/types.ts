@@ -1,7 +1,12 @@
 // App-level types: re-exports SDK types + API response schemas
 
 import {z} from "zod"
-import {AgentNodeSchema, EventSchema, SessionDataSchema, SessionHandleSchema} from "@codethread/claude-sdk/types"
+import {
+	AgentNodeSchema,
+	EventSchema,
+	SessionDataSchema,
+	SessionHandleSchema,
+} from "@codethread/claude-sdk/types"
 
 // Re-export only types so the browser bundle never pulls in the SDK's node:path runtime
 export type * from "@codethread/claude-sdk/types"
@@ -9,7 +14,11 @@ export type * from "@codethread/claude-sdk/types"
 // App-level API response types (server <-> frontend contract)
 
 export const DirectoriesResponseSchema = z.discriminatedUnion("status", [
-	z.object({status: z.literal("success"), directories: z.array(z.string()), displayNames: z.record(z.string(), z.string())}),
+	z.object({
+		status: z.literal("success"),
+		directories: z.array(z.string()),
+		displayNames: z.record(z.string(), z.string()),
+	}),
 	z.object({status: z.literal("error"), error: z.string()}),
 ])
 

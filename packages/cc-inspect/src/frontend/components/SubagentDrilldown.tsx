@@ -1,7 +1,12 @@
 import type {AgentNode, Event, SessionData} from "#types"
 import {getAgentColorSet} from "./session-view/agent-colors"
 import {groupIntoTurns} from "./session-view/grouping"
-import {formatAgentModelLabel, formatTokenCount, getPendingTaskDescriptions, isAgentComplete} from "./session-view/helpers"
+import {
+	formatAgentModelLabel,
+	formatTokenCount,
+	getPendingTaskDescriptions,
+	isAgentComplete,
+} from "./session-view/helpers"
 import {TurnView} from "./TurnView"
 import {TurnWrapper} from "./TurnWrapper"
 
@@ -26,7 +31,6 @@ export function SubagentDrilldown({
 	defaultToolsExpanded: boolean
 	isNewEvent: (eventId: string) => boolean
 }) {
-
 	const colors = getAgentColorSet(agents, agentId)
 	const agentNode = agents.find((a) => a.id === agentId) ?? null
 	const resolvedName = agentNode?.name !== agentId ? agentNode?.name : undefined
@@ -76,7 +80,9 @@ export function SubagentDrilldown({
 						<span className="font-semibold uppercase tracking-wide text-xs">{label}</span>
 						{(modelLabel || agentNode?.totalTokens != null) && (
 							<span className="text-[10px] text-zinc-500 tracking-wide">
-								{[modelLabel, agentNode?.totalTokens != null ? formatTokenCount(agentNode.totalTokens) : null].filter(Boolean).join(" · ")}
+								{[modelLabel, agentNode?.totalTokens != null ? formatTokenCount(agentNode.totalTokens) : null]
+									.filter(Boolean)
+									.join(" · ")}
 							</span>
 						)}
 					</span>

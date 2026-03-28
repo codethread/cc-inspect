@@ -3,6 +3,13 @@
   "private": true,
   "workspaces": ["packages/*"],
   "scripts": {
-    "dev": "bun run --cwd packages/cc-inspect dev"
+    "dev": "bun run --cwd packages/cc-inspect dev",
+    "lint": "biome lint .",
+    "fmt": "biome format --write .",
+    "fmt:check": "biome format .",
+    "check": "biome check .",
+    "fix": "biome check --write --unsafe --log-level=error .",
+    "typecheck": "bun run --filter '*' typecheck",
+    "build": "bun run --filter '*' build"
   }
 }

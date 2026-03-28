@@ -45,7 +45,10 @@ export const useUIStore = create<UIState>()(
 				setAllToolsExpanded: (expanded) =>
 					set({allToolsExpanded: expanded}, false, {type: STORE_ACTION.UI.SET_ALL_TOOLS_EXPANDED, expanded}),
 				setAllAgentsExpanded: (expanded) =>
-					set({allAgentsExpanded: expanded}, false, {type: STORE_ACTION.UI.SET_ALL_AGENTS_EXPANDED, expanded}),
+					set({allAgentsExpanded: expanded}, false, {
+						type: STORE_ACTION.UI.SET_ALL_AGENTS_EXPANDED,
+						expanded,
+					}),
 				setDrilldownAgentId: (id) =>
 					set({drilldownAgentId: id}, false, {type: STORE_ACTION.UI.SET_DRILLDOWN_AGENT_ID, id}),
 				setDetailRawView: (raw) =>
