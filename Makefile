@@ -1,4 +1,4 @@
-.PHONY: run lint fmt fmt-check check fix typecheck build verify test
+.PHONY: run
 
 run:
 	bun install
@@ -6,29 +6,3 @@ run:
 	mkdir -p ~/.local/bin
 	ln -sf $(CURDIR)/packages/cc-inspect/bin/cc-inspect ~/.local/bin/cc-inspect
 	cc-inspect
-
-lint:
-	bun run lint
-
-fmt:
-	bun run fmt
-
-fmt-check:
-	bun run fmt:check
-
-check:
-	bun run check
-
-fix:
-	bun run fix
-
-typecheck:
-	bun run typecheck
-
-build:
-	bun run build
-
-test:
-	bun run --filter '*' test
-
-verify: fix typecheck build

@@ -1,0 +1,121 @@
+project: "cc-inspect"
+prd: "prd.md"
+description: "Simplify build config: Makefile consumer-only, package.json source of truth, hooks named after behavior"
+
+requirements:
+  - name: "Bun installed"
+    check: "bun --version"
+  - name: "Biome available"
+    check: "biome --version"
+  - name: "Claude CLI available"
+    check: "claude --version"
+
+tasks:
+  - id: "001"
+    title: "Update root package.json verify script and strip Makefile"
+    description: |
+      Two changes that establish package.json as the source of truth:
+
+      1. Root package.json: change verify script from
+         "bun run typecheck && bun run check && bun run build"
+         to "bun run fix && bun run typecheck && bun run build".
+         The fix script already uses --write --unsafe flags.
+
+      2. Makefile: remove all targets except `run`. The run target
+         (install → build → symlink → launch) stays as-is. Remove:
+         lint, fmt, fmt-check, check, fix, typecheck, build, test, verify,
+         and the .PHONY line listing them.
+    status: "done"
+    files:
+      modify:
+        - "package.json"
+        - "Makefile"
+    acceptance:
+      - "package.json verify script is: bun run fix && bun run typecheck && bun run build"
+      - "Makefile contains only the run target and its .PHONY declaration"
+      - "bun run verify exits 0"
+      - "bun run verify stderr shows fix, typecheck, build steps in that order"
+      - "make (default target) runs successfully"
+    notes: |
+      Makefile keeps a 'verify' shim target (delegates to bun run verify) alongside 'run'.
+      This is intentional — stop-verify.ts hook still calls 'make verify'; removing it
+      before task 002 migrates the hook would break verification. Task 002 should also
+      remove the verify target from the Makefile when it updates the hook.
+
+  - id: "002"
+    title: "Rename post-edit hook, update stop-verify hook, update settings.json"
+    description: |
+      Three tightly coupled changes — must land together to keep config consistent:
+
+      1. Rename .claude/hooks/post-edit-biome.ts → .claude/hooks/post-edit-check.ts.
+         Add --unsafe flag to the biome check command so it matches the fix script:
+         `biome check --write --unsafe --log-level=error <file>`.
+         All other behavior stays the same (stdin JSON parsing, .ts/.tsx filter, error reporting).
+
+      2. Update .claude/hooks/stop-verify.ts: replace `make verify` with `bun run verify`.
+         Everything else stays the same (stdin JSON parsing, exit code check, block decision).
+
+      3. Update .claude/settings.json: change both PostToolUse hook command paths
+         from post-edit-biome.ts to post-edit-check.ts. The Edit and Write matchers
+         both point to the same hook file.
+    status: "done"
+    files:
+      create:
+        - ".claude/hooks/post-edit-check.ts"
+      modify:
+        - ".claude/hooks/stop-verify.ts"
+        - ".claude/settings.json"
+    acceptance:
+      - ".claude/hooks/post-edit-check.ts exists and contains --unsafe flag"
+      - ".claude/hooks/post-edit-biome.ts does not exist"
+      - "stop-verify.ts contains 'bun run verify', not 'make verify'"
+      - "settings.json references post-edit-check.ts in both PostToolUse entries"
+      - "settings.json does not reference post-edit-biome.ts"
+      - "No references to removed Makefile targets in any hook file"
+    notes: |
+      Hook file must be executable (chmod +x) — the Write tool creates files as 644,
+      so executable bit must be set explicitly. The verify shim in Makefile was also
+      removed here (as planned in task 001 notes) since stop-verify.ts now calls bun directly.
+
+  - id: "003"
+    title: "Run integration tests via harness and clean up"
+    description: |
+      Use the prototype harness at test-hooks-harness.ts to verify hooks work end-to-end.
+      The harness spawns claude -p in a subprocess with CLAUDECODE env var stripped.
+
+      Test cases:
+
+      1. Post-edit check: harness creates a scratch file at
+         packages/cc-inspect/src/_hook-test-scratch.ts with bad formatting
+         (e.g. "const y=2" missing spaces). Instructs Claude (haiku, --max-turns 4)
+         to read then edit the file. After completion, checks the file has biome
+         formatting applied (spaces around =). This proves the PostToolUse hook ran.
+         PostToolUse hooks don't emit stream events — verify by file effects only.
+
+      2. Verify pipeline: runs bun run verify directly, confirms exit 0 and
+         stderr shows fix, typecheck, build steps.
+
+      Run: bun test-hooks-harness.ts
+      All checks must pass. Clean up scratch files and delete test-hooks-harness.ts
+      after successful run.
+    status: "done"
+    files:
+      modify:
+        - "test-hooks-harness.ts"
+    acceptance:
+      - "bun test-hooks-harness.ts runs with all checks passing"
+      - "Scratch files cleaned up after test"
+      - "test-hooks-harness.ts deleted after successful QA"
+    notes: |
+      All 7 checks passed. Harness and scratch file cleaned up. Harness is fully deleted.
+
+qa:
+  agent:
+    - "bun run verify exits 0 from root"
+    - "make runs successfully (default target)"
+    - "All hook files exist at expected paths"
+    - "No stale references to post-edit-biome.ts or make verify in hooks/settings"
+    - "Headless Claude harness passes all checks"
+  human:
+    - "Edit a .ts file in interactive Claude Code → post-edit-check hook fires and formats"
+    - "Complete a task in Claude Code → stop-verify hook runs full verify pipeline"

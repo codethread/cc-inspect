@@ -4,12 +4,13 @@
   "workspaces": ["packages/*"],
   "scripts": {
     "dev": "bun run --cwd packages/cc-inspect dev",
-    "lint": "biome lint .",
-    "fmt": "biome format --write .",
-    "fmt:check": "biome format .",
-    "check": "biome check .",
-    "fix": "biome check --write --unsafe --log-level=error .",
+    "lint": "${BIOME_BINARY:-biome} lint .",
+    "fmt": "${BIOME_BINARY:-biome} format --write .",
+    "fmt:check": "${BIOME_BINARY:-biome} format .",
+    "check": "${BIOME_BINARY:-biome} check .",
+    "fix": "${BIOME_BINARY:-biome} check --write --unsafe --log-level=error .",
     "typecheck": "bun run --filter '*' typecheck",
-    "build": "bun run --filter '*' build"
+    "build": "bun run --filter '*' build",
+    "verify": "bun run fix && bun run typecheck && bun run build"
   }
 }

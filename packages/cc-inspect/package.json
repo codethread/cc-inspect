@@ -11,11 +11,11 @@
     "start": "bun src/server/index.tsx",
     "build": "bun run build.ts",
     "typecheck": "tsc --noEmit",
-    "fmt": "biome format --write .",
-    "lint": "biome lint .",
-    "check": "biome check .",
-    "fix": "biome check --write --unsafe --log-level=error .",
-    "verify": "bun run typecheck && bun run lint && bun fmt",
+    "fmt": "${BIOME_BINARY:-biome} format --write .",
+    "lint": "${BIOME_BINARY:-biome} lint .",
+    "check": "${BIOME_BINARY:-biome} check .",
+    "fix": "${BIOME_BINARY:-biome} check --write --unsafe --log-level=error .",
+    "verify": "bun run typecheck && bun run lint && bun fmt && bun run build",
     "test": "bun test"
   },
   "imports": {
