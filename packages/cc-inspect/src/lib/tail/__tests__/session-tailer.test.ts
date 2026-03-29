@@ -1,9 +1,9 @@
 import {describe, expect, it} from "bun:test"
 import {
-	sessionTransition,
 	type SessionTailerEffect,
 	type SessionTailerEvent,
 	type SessionTailerState,
+	sessionTransition,
 } from "../session-tailer"
 
 // ---------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-import {type LogEntry, type LogLevel, LOG_LEVEL_ORDER} from "./types"
+import {LOG_LEVEL_ORDER, type LogEntry, type LogLevel} from "./types"
 
 let ws: WebSocket | null = null
 let buffer: LogEntry[] = []

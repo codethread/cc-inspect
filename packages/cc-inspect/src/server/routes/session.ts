@@ -1,6 +1,6 @@
 import {basename, dirname, join} from "node:path"
-import type {SessionDataResponse} from "#types"
 import {Claude, ParseError} from "@codethread/claude-sdk"
+import type {SessionDataResponse} from "#types"
 import {LOG_MESSAGE, LOG_MODULE} from "../../lib/event-catalog"
 import {getServerLogger} from "../../lib/log/server-instance"
 import {isValidSessionPath} from "../utils"

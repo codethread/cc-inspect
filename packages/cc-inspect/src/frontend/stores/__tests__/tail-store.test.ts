@@ -1,9 +1,9 @@
 import {describe, expect, it} from "bun:test"
 import {
-	tailConnectionTransition,
 	type TailConnection,
 	type TailConnectionEffect,
 	type TailConnectionEvent,
+	tailConnectionTransition,
 } from "../tail-store"
 
 // ---------------------------------------------------------------------------

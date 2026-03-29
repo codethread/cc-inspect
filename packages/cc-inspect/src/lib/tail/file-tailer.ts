@@ -1,4 +1,4 @@
-import {watch, type FSWatcher} from "node:fs"
+import {type FSWatcher, watch} from "node:fs"
 import {LOG_MESSAGE, LOG_MODULE} from "../event-catalog"
 import {getServerLogger} from "../log/server-instance"
 

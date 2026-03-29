@@ -4,9 +4,9 @@ import {
 	getPanelBreakpoint,
 	getPanelBreakpointFallbackOrder,
 	loadPanelSizesFromStorage,
+	type PersistedPanelSizes,
 	resolvePanelSize,
 	updatePanelSizeForBreakpoint,
-	type PersistedPanelSizes,
 } from "./panel-sizing"
 
 describe("getPanelBreakpoint", () => {

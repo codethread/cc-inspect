@@ -1,1 +1,17 @@
-{}
+{
+	"hooks": {
+		"Stop": [
+			{
+				"matcher": "",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "$CLAUDE_PROJECT_DIR/.claude/hooks/stop-verify.ts",
+						"timeout": 120,
+						"statusMessage": "Running format, lint, typecheck, and build..."
+					}
+				]
+			}
+		]
+	}
+}

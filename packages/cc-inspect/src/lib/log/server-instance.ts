@@ -1,7 +1,7 @@
-import type {LogLevel} from "./types"
 import type {Logger} from "./logger"
 import {createLogger} from "./logger"
-import {type LogWriter, createLogWriter} from "./writer"
+import type {LogLevel} from "./types"
+import {createLogWriter, type LogWriter} from "./writer"
 
 let writer: LogWriter | null = null
 let minLevel: LogLevel = "info"

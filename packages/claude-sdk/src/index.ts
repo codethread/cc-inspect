@@ -108,8 +108,7 @@ export class Claude {
 
 // Re-export SDK types and classes
 export {ParseError} from "./errors"
-export type {FileReader} from "./parser"
-export {bunFileReader, normalizeToolUseResult} from "./parser"
+export * from "./event-catalog"
 export {
 	buildAgentNode,
 	createParseStateFromSession,
@@ -118,5 +117,6 @@ export {
 	processAgentEntries,
 	processMainEntries,
 } from "./incremental"
-export * from "./event-catalog"
+export type {FileReader} from "./parser"
+export {bunFileReader, normalizeToolUseResult} from "./parser"
 export * from "./types"

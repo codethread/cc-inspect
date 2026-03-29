@@ -1,4 +1,4 @@
-import {type LogComponent, type LogEntry, type LogLevel, LOG_LEVEL_ORDER} from "./types"
+import {LOG_LEVEL_ORDER, type LogComponent, type LogEntry, type LogLevel} from "./types"
 
 export interface Logger {
 	debug(msg: string, data?: Record<string, unknown>): void

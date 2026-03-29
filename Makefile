@@ -31,4 +31,4 @@ build:
 test:
 	bun run --filter '*' test
 
-verify: typecheck lint fmt-check
+verify: fix typecheck build

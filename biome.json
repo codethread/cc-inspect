@@ -1,5 +1,5 @@
 {
-	"$schema": "https://biomejs.dev/schemas/2.3.13/schema.json",
+	"$schema": "https://biomejs.dev/schemas/2.4.9/schema.json",
 	"files": {
 		"includes": ["packages/*/src/**/*.ts", "packages/*/src/**/*.tsx"]
 	},
@@ -7,14 +7,7 @@
 		"enabled": true,
 		"rules": {
 			"recommended": true,
-			"nursery": {
-				"useMaxParams": {
-					"level": "error",
-					"options": {
-						"max": 3
-					}
-				}
-			},
+			"nursery": {},
 			"style": {
 				"useNodejsImportProtocol": "off",
 				"useAtIndex": "error",
@@ -29,6 +22,14 @@
 				"noConsole": "off",
 				"noFocusedTests": "error",
 				"noSkippedTests": "error"
+			},
+			"complexity": {
+				"useMaxParams": {
+					"level": "error",
+					"options": {
+						"max": 3
+					}
+				}
 			}
 		}
 	},

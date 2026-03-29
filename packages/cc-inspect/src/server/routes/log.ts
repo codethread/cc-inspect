@@ -1,6 +1,6 @@
 import {LOG_MESSAGE, LOG_MODULE} from "../../lib/event-catalog"
-import {LogEntrySchema} from "../../lib/log/types"
 import {getLogWriter, getServerLogger} from "../../lib/log/server-instance"
+import {LogEntrySchema} from "../../lib/log/types"
 
 const log = () => getServerLogger(LOG_MODULE.ROUTES_LOG)
 

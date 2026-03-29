@@ -1,14 +1,14 @@
+import {afterEach, beforeAll, beforeEach, describe, expect, it} from "bun:test"
 import {appendFileSync, mkdirSync, unlinkSync, writeFileSync} from "node:fs"
 import {tmpdir} from "node:os"
 import {join} from "node:path"
-import {afterEach, beforeAll, beforeEach, describe, expect, it} from "bun:test"
 import {initLogging} from "../../log/server-instance"
 import {
 	FileTailer,
-	transition,
 	type FileTailerEffect,
 	type FileTailerEvent,
 	type FileTailerState,
+	transition,
 } from "../file-tailer"
 
 // ---------------------------------------------------------------------------

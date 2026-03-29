@@ -1,6 +1,6 @@
-import {createClientLogger} from "../../lib/log/client"
-import {LOG_MESSAGE, STORE_LOG_MODULE, type StoreKey} from "../../lib/event-catalog"
 import type {StateCreator, StoreMutatorIdentifier} from "zustand"
+import {LOG_MESSAGE, STORE_LOG_MODULE, type StoreKey} from "../../lib/event-catalog"
+import {createClientLogger} from "../../lib/log/client"
 
 const MAX_ARRAY_PREVIEW_ITEMS = 8
 const MAX_MAP_PREVIEW_ENTRIES = 8
