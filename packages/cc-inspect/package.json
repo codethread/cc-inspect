@@ -37,6 +37,7 @@
     "react-dom": "^19",
     "react-hotkeys-hook": "^5.2.4",
     "react-intersection-observer": "^10.0.3",
+    "sonner": "^2.0.7",
     "tailwind-merge": "^3.5.0",
     "tailwindcss": "^4.1.11",
     "zod": "^4.1.12",

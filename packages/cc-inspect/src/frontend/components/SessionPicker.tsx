@@ -1,5 +1,7 @@
+import {CopyIcon} from "lucide-react"
 import {useQueryState} from "nuqs"
-import {useEffect} from "react"
+import {useCallback, useEffect} from "react"
+import {toast} from "sonner"
 import type {SessionData, SessionHandle} from "#types"
 import {useDirectories, useSessions} from "../api"
 import {usePickerStore} from "../stores/picker-store"
@@ -21,6 +23,26 @@ export function SessionPicker({
 	const {data: sessions = [], isLoading} = useSessions(dir)
 	const activeSession = sessions.find((s) => s.sessionFilePath === sessionPath)
 
+	const handleCopy = useCallback(() => {
+		if (!sessionPath) return
+		const copy = navigator.clipboard
+			? navigator.clipboard.writeText(sessionPath)
+			: new Promise<void>((resolve, reject) => {
+					const ta = document.createElement("textarea")
+					ta.value = sessionPath
+					ta.style.position = "fixed"
+					ta.style.opacity = "0"
+					document.body.appendChild(ta)
+					ta.select()
+					document.execCommand("copy") ? resolve() : reject()
+					document.body.removeChild(ta)
+				})
+		copy.then(
+			() => toast.success("Session path copied", {description: sessionPath}),
+			() => toast.error("Failed to copy path"),
+		)
+	}, [sessionPath])
+
 	// Derive the active project directory from the current session path on initial load
 	useEffect(() => {
 		if (sessionPath && directories.length > 0 && !dir) {
@@ -30,84 +52,96 @@ export function SessionPicker({
 	}, [sessionPath, directories, dir, setDir])
 
 	return (
-		<Popover open={open} onOpenChange={setOpen}>
-			<PopoverTrigger asChild>
+		<div className="flex items-center gap-1">
+			<Popover open={open} onOpenChange={setOpen}>
+				<PopoverTrigger asChild>
+					<button
+						type="button"
+						className="flex items-center gap-2 text-sm text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
+					>
+						<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth={1.5}
+								d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
+							/>
+						</svg>
+						{sessionData ? (
+							<span className="flex items-center gap-2">
+								{dir && <span className="text-xs text-zinc-500">{formatProjectName(dir, displayNames)}</span>}
+								<span className="font-mono text-xs">{sessionData.sessionId.slice(0, 14)}</span>
+								{activeSession?.customTitle && (
+									<span className="text-xs text-zinc-400 truncate max-w-40" title={activeSession.customTitle}>
+										{activeSession.customTitle}
+									</span>
+								)}
+							</span>
+						) : (
+							<span>Open session</span>
+						)}
+					</button>
+				</PopoverTrigger>
+				<PopoverContent
+					align="start"
+					sideOffset={8}
+					className="w-80 bg-zinc-900 border-zinc-700 p-0 rounded-xl shadow-2xl"
+				>
+					<div className="p-3 border-b border-zinc-800">
+						<select
+							className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-200"
+							value={dir}
+							onChange={(e) => setDir(e.target.value)}
+						>
+							<option value="">Select project...</option>
+							{directories.map((d) => (
+								<option key={d} value={d}>
+									{formatProjectName(d, displayNames)}
+								</option>
+							))}
+						</select>
+					</div>
+					<div className="max-h-60 overflow-y-auto">
+						{isLoading && dir && <div className="p-3 text-sm text-zinc-500">Loading...</div>}
+						{!dir && <div className="p-3 text-sm text-zinc-600">Choose a project first</div>}
+						{dir && !isLoading && sessions.length === 0 && (
+							<div className="p-3 text-sm text-zinc-600">No sessions</div>
+						)}
+						{sessions.map((s: SessionHandle) => (
+							<button
+								key={s.sessionFilePath}
+								type="button"
+								onClick={() => {
+									onSelect(s.sessionFilePath)
+									setOpen(false)
+								}}
+								className={`w-full text-left px-3 py-2 text-sm border-b border-zinc-800/50 last:border-0 transition-colors cursor-pointer ${
+									s.sessionFilePath === sessionPath
+										? "bg-zinc-800 text-zinc-100"
+										: "hover:bg-zinc-800 text-zinc-300"
+								}`}
+							>
+								<span className="font-mono text-xs text-zinc-500">{s.id.slice(0, 14)}</span>
+								{s.customTitle && (
+									<span className="ml-2 text-xs text-zinc-400 truncate" title={s.customTitle}>
+										{s.customTitle.length > 30 ? `${s.customTitle.slice(0, 30)}…` : s.customTitle}
+									</span>
+								)}
+							</button>
+						))}
+					</div>
+				</PopoverContent>
+			</Popover>
+			{sessionPath && (
 				<button
 					type="button"
-					className="flex items-center gap-2 text-sm text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
+					onClick={handleCopy}
+					title="Copy session file path"
+					className="p-1 text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer"
 				>
-					<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-						<path
-							strokeLinecap="round"
-							strokeLinejoin="round"
-							strokeWidth={1.5}
-							d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
-						/>
-					</svg>
-					{sessionData ? (
-						<span className="flex items-center gap-2">
-							{dir && <span className="text-xs text-zinc-500">{formatProjectName(dir, displayNames)}</span>}
-							<span className="font-mono text-xs">{sessionData.sessionId.slice(0, 14)}</span>
-							{activeSession?.customTitle && (
-								<span className="text-xs text-zinc-400 truncate max-w-40" title={activeSession.customTitle}>
-									{activeSession.customTitle}
-								</span>
-							)}
-						</span>
-					) : (
-						<span>Open session</span>
-					)}
+					<CopyIcon className="w-3.5 h-3.5" aria-hidden="true" />
 				</button>
-			</PopoverTrigger>
-			<PopoverContent
-				align="start"
-				sideOffset={8}
-				className="w-80 bg-zinc-900 border-zinc-700 p-0 rounded-xl shadow-2xl"
-			>
-				<div className="p-3 border-b border-zinc-800">
-					<select
-						className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-200"
-						value={dir}
-						onChange={(e) => setDir(e.target.value)}
-					>
-						<option value="">Select project...</option>
-						{directories.map((d) => (
-							<option key={d} value={d}>
-								{formatProjectName(d, displayNames)}
-							</option>
-						))}
-					</select>
-				</div>
-				<div className="max-h-60 overflow-y-auto">
-					{isLoading && dir && <div className="p-3 text-sm text-zinc-500">Loading...</div>}
-					{!dir && <div className="p-3 text-sm text-zinc-600">Choose a project first</div>}
-					{dir && !isLoading && sessions.length === 0 && (
-						<div className="p-3 text-sm text-zinc-600">No sessions</div>
-					)}
-					{sessions.map((s: SessionHandle) => (
-						<button
-							key={s.sessionFilePath}
-							type="button"
-							onClick={() => {
-								onSelect(s.sessionFilePath)
-								setOpen(false)
-							}}
-							className={`w-full text-left px-3 py-2 text-sm border-b border-zinc-800/50 last:border-0 transition-colors cursor-pointer ${
-								s.sessionFilePath === sessionPath
-									? "bg-zinc-800 text-zinc-100"
-									: "hover:bg-zinc-800 text-zinc-300"
-							}`}
-						>
-							<span className="font-mono text-xs text-zinc-500">{s.id.slice(0, 14)}</span>
-							{s.customTitle && (
-								<span className="ml-2 text-xs text-zinc-400 truncate" title={s.customTitle}>
-									{s.customTitle.length > 30 ? `${s.customTitle.slice(0, 30)}…` : s.customTitle}
-								</span>
-							)}
-						</button>
-					))}
-				</div>
-			</PopoverContent>
-		</Popover>
+			)}
+		</div>
 	)
 }
