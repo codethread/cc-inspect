@@ -23,24 +23,14 @@ export function SessionPicker({
 	const {data: sessions = [], isLoading} = useSessions(dir)
 	const activeSession = sessions.find((s) => s.sessionFilePath === sessionPath)
 
-	const handleCopy = useCallback(() => {
+	const handleCopy = useCallback(async () => {
 		if (!sessionPath) return
-		const copy = navigator.clipboard
-			? navigator.clipboard.writeText(sessionPath)
-			: new Promise<void>((resolve, reject) => {
-					const ta = document.createElement("textarea")
-					ta.value = sessionPath
-					ta.style.position = "fixed"
-					ta.style.opacity = "0"
-					document.body.appendChild(ta)
-					ta.select()
-					document.execCommand("copy") ? resolve() : reject()
-					document.body.removeChild(ta)
-				})
-		copy.then(
-			() => toast.success("Session path copied", {description: sessionPath}),
-			() => toast.error("Failed to copy path"),
-		)
+		try {
+			await navigator.clipboard.writeText(sessionPath)
+			toast.success("Session path copied", {description: sessionPath})
+		} catch {
+			toast.error("Failed to copy path")
+		}
 	}, [sessionPath])
 
 	// Derive the active project directory from the current session path on initial load
