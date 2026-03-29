@@ -679,7 +679,7 @@ export function SessionView() {
 		>
 			{/* Header */}
 			<header
-				className={`flex items-center gap-2 sm:gap-4 px-3 sm:px-6 py-2 sm:py-3 bg-zinc-900/80 border-b border-zinc-800 flex-shrink-0 backdrop-blur-sm ${isMobile ? "overflow-x-auto" : ""}`}
+				className={`flex items-center gap-2 sm:gap-4 px-3 sm:px-6 pb-2 sm:pb-3 pt-[max(0.5rem,env(safe-area-inset-top))] sm:pt-[max(0.75rem,env(safe-area-inset-top))] bg-zinc-900/80 border-b border-zinc-800 flex-shrink-0 backdrop-blur-sm ${isMobile ? "overflow-x-auto" : ""}`}
 			>
 				<span className="text-sm font-semibold text-zinc-100 tracking-tight whitespace-nowrap">
 					cc-inspect

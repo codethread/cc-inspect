@@ -122,6 +122,44 @@ Examples:
 				)
 			},
 
+			"/manifest.json": () => {
+				return Response.json({
+					name: "CC Inspect",
+					short_name: "CC Inspect",
+					start_url: "/",
+					display: "standalone",
+					background_color: "#09090b",
+					theme_color: "#09090b",
+					icons: [
+						{
+							src: "/icon.svg",
+							sizes: "any",
+							type: "image/svg+xml",
+							purpose: "any",
+						},
+						{
+							src: "/apple-touch-icon.png",
+							sizes: "180x180",
+							type: "image/png",
+							purpose: "any",
+						},
+					],
+				})
+			},
+
+			"/apple-touch-icon.png": () => {
+				return new Response(Bun.file(new URL("icon-180.png", import.meta.url)), {
+					headers: {"Content-Type": "image/png"},
+				})
+			},
+
+			"/icon.svg": () => {
+				return new Response(
+					`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="96" fill="#09090b"/><circle cx="208" cy="208" r="96" fill="none" stroke="#d4d4d8" stroke-width="40"/><line x1="275" y1="275" x2="384" y2="384" stroke="#d4d4d8" stroke-width="40" stroke-linecap="round"/></svg>`,
+					{headers: {"Content-Type": "image/svg+xml"}},
+				)
+			},
+
 			"/*": index,
 		},
 
