@@ -6,7 +6,7 @@ const input = await Bun.stdin.json();
 
 const root = process.env.CLAUDE_PROJECT_DIR ?? input?.cwd ?? process.cwd();
 
-const verify = await $`nix develop --command make verify`
+const verify = await $`make verify`
   .cwd(root)
   .quiet()
   .nothrow();

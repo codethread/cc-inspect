@@ -43,3 +43,6 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # Dolt database files (added by bd init)
 .dolt/
 *.db
+
+# direnv
+.direnv/
