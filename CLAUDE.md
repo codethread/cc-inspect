@@ -1,7 +1,5 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 ## Project Overview
 
 This is a Bun workspaces monorepo with two packages:
@@ -15,17 +13,12 @@ This is a Bun workspaces monorepo with two packages:
 packages/
   claude-sdk/          # @codethread/claude-sdk — publishable SDK
   cc-inspect/          # cc-inspect app — server + frontend
-biome.json             # shared linter/formatter config
-tsconfig.json          # project references to both packages
-package.json           # workspace root
 ```
 
 ## Common Commands
 
-Run from the **root**:
-- `bun install` — install all workspace dependencies
-
 Run from **`packages/cc-inspect/`**:
+
 - `bun dev` — start dev server with hot reload on port 5555
 - `bun start` — run without hot reload
 - `bun test` — run app test suite
@@ -33,6 +26,7 @@ Run from **`packages/cc-inspect/`**:
 - `bun run fix` — auto-fix Biome issues
 
 Run from **`packages/claude-sdk/`**:
+
 - `bun test` — run SDK test suite
 - `bun run typecheck` — typecheck SDK
 
